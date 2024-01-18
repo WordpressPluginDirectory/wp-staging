@@ -38,6 +38,18 @@ class SiteInfo
      */
     const STAGING_FILE = '.wp-staging';
 
+    /** @var string */
+    const HOSTED_ON_WP = 'wp.com';
+
+    /** @var string */
+    const HOSTED_ON_FLYWHEEL = 'flywheel';
+
+    /** @var string */
+    const HOSTED_ON_BITNAMI = 'bitnami';
+
+    /** @var string */
+    const OTHER_HOST = 'other';
+
     /**
      * @var CloneOptions
      */
@@ -57,7 +69,7 @@ class SiteInfo
     /**
      * @return bool True if it is staging site. False otherwise.
      */
-    public function isStagingSite()
+    public function isStagingSite(): bool
     {
         if (defined('WPSTAGING_DEV_SITE') && WPSTAGING_DEV_SITE === true) {
             return true;
@@ -72,10 +84,8 @@ class SiteInfo
 
     /**
      * @return bool True if it is staging site. False otherwise.
-     *
-     * @todo update with WPStaging/Framework/Staging/CloneOption once PR #717 is merged
      */
-    public function isCloneable()
+    public function isCloneable(): bool
     {
         // Site should be cloneable if not staging i.e. production site
         if (!$this->isStagingSite()) {
@@ -88,7 +98,7 @@ class SiteInfo
         }
 
         // New condition for checking whether staging is cloneable or not
-        return $this->cloneOptions->get(self::IS_CLONEABLE_KEY);
+        return $this->cloneOptions->get(self::IS_CLONEABLE_KEY, false);
     }
 
     /**
@@ -98,7 +108,7 @@ class SiteInfo
      *
      * @return bool
      */
-    public function isInstalledInSubDir()
+    public function isInstalledInSubDir(): bool
     {
         $siteUrl = get_option('siteurl');
         $homeUrl = get_option('home');
@@ -123,7 +133,7 @@ class SiteInfo
      *
      * @return bool
      */
-    public function enableStagingSiteCloning()
+    public function enableStagingSiteCloning(): bool
     {
         // Early Bail: if site is not staging
         if (!$this->isStagingSite()) {
@@ -143,7 +153,7 @@ class SiteInfo
      *
      * @return bool
      */
-    public function disableStagingSiteCloning()
+    public function disableStagingSiteCloning(): bool
     {
         // Early Bail: if site is not staging
         if (!$this->isStagingSite()) {
@@ -170,7 +180,7 @@ class SiteInfo
     /**
      * @return bool True if "short_open_tags" is enabled, false if disabled.
      */
-    public function isPhpShortTagsEnabled()
+    public function isPhpShortTagsEnabled(): bool
     {
         return in_array(strtolower(ini_get('short_open_tags')), ['1', 'on', 'true']);
     }
@@ -180,15 +190,25 @@ class SiteInfo
      *
      * @return bool
      */
-    public function isWpBakeryActive()
+    public function isWpBakeryActive(): bool
     {
         return defined('WPB_VC_VERSION');
     }
 
     /**
-     * @return array
+     * Is Jetpack plugin active?
+     *
+     * @return bool
      */
-    public function getErrors()
+    public function isJetpackActive(): bool
+    {
+        return class_exists('Jetpack');
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getErrors(): array
     {
         return $this->errors;
     }
@@ -196,7 +216,15 @@ class SiteInfo
     /**
      * @return bool
      */
-    public function isWpContentOutsideAbspath()
+    public function isBitnami(): bool
+    {
+        return ABSPATH === '/opt/bitnami/wordpress/';
+    }
+
+    /**
+     * @return bool
+     */
+    public function isWpContentOutsideAbspath(): bool
     {
         $wpContentDir = wp_normalize_path(WP_CONTENT_DIR);
         $abspath      = wp_normalize_path(ABSPATH);
@@ -207,12 +235,50 @@ class SiteInfo
     /**
      * @return bool
      */
-    public function isFlywheel()
+    public function isFlywheel(): bool
     {
         if (!$this->isWpContentOutsideAbspath()) {
             return false;
         }
 
         return file_exists(trailingslashit(wp_normalize_path(ABSPATH)) . '.fw-config.php');
+    }
+
+    /**
+     * @return bool
+     */
+    public function isHostedOnWordPressCom(): bool
+    {
+        if (!$this->isWpContentOutsideAbspath()) {
+            return false;
+        }
+
+        $parentDirectory = dirname(trailingslashit(wp_normalize_path(WP_CONTENT_DIR)));
+        $wpcomDetection  = trailingslashit($parentDirectory) . '__wp__';
+        if (!is_link($wpcomDetection)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return string
+     */
+    public function getHostingType(): string
+    {
+        if ($this->isFlywheel()) {
+            return self::HOSTED_ON_FLYWHEEL;
+        }
+
+        if ($this->isHostedOnWordPressCom()) {
+            return self::HOSTED_ON_WP;
+        }
+
+        if ($this->isBitnami()) {
+            return self::HOSTED_ON_BITNAMI;
+        }
+
+        return self::OTHER_HOST;
     }
 }
