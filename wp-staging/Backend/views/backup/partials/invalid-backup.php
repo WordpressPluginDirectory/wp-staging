@@ -17,16 +17,16 @@ if (!isset($urlAssets)) {
 
 <a href="javascript:void(0)" class="wpstg-tab-header" data-id="#wpstg-invalid-backup-<?php echo esc_attr($id); ?>">
     <?php if (empty($sizeIssues) && empty($missingParts)) : ?>
-        <span class="wpstg-tab-triangle" style="color: #3e3e3e"></span>
-        <span style="color:#3e3e3e"><?php esc_html_e("Show available backup parts", "wp-staging") ?></span>
-    <?php else : ?>
         <span class="wpstg-tab-triangle"></span>
+        <span class="wpstg-backup-parts-heading"><?php esc_html_e("Show available backup parts", "wp-staging") ?></span>
+    <?php else : ?>
+        <span class="wpstg-tab-triangle wpstg--red"></span>
         <span class="wpstg--text--danger"><?php esc_html_e("This is a multipart backup with issues!", "wp-staging") ?> </span>
-        <div class="wpstg--tooltip" style="position: absolute;">
+        <div class="wpstg--tooltip">
             <img class="wpstg--dashicons wpstg-dashicons-19 wpstg--grey" src="<?php echo esc_url($urlAssets); ?>svg/vendor/dashicons/info-outline.svg" alt="info"/>
             <span class="wpstg--tooltiptext wpstg--tooltiptext-backups">
-            <?php esc_html_e("This backup contains missing or invalid parts.", 'wp-staging') ?>
-        </span>
+                <?php esc_html_e("This backup contains missing or invalid parts.", 'wp-staging') ?>
+            </span>
         </div>
     <?php endif; ?>
 </a>

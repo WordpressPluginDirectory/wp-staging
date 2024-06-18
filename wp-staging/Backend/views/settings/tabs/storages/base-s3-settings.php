@@ -34,7 +34,7 @@ use WPStaging\Framework\Facades\Escape;
     $locationName           = empty($locationName) ? 'Bucket' : $locationName;
     ?>
     <p>
-        <strong class="wpstg-fs-14"><?php echo esc_html($providerName); ?></strong>
+        <strong class="wpstg-fs-18"><?php echo esc_html($providerName); ?></strong>
         <br/>
         <br/>
         <?php echo sprintf(esc_html__('Upload backup files to your  %s account.', 'wp-staging'), esc_html($providerName)); ?>
@@ -60,12 +60,12 @@ use WPStaging\Framework\Facades\Escape;
 
                 <fieldset class="wpstg-fieldset">
                     <label for="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-access-key"><?php esc_html_e('Access Key', 'wp-staging') ?></label>
-                    <input id="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-access-key" class="wpstg-form-control" style="min-width:300px;" type="text" name="access_key" value="<?php echo esc_attr($accessKey); ?>" />
+                    <input id="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-access-key" class="wpstg-form-control" style="min-width:300px;" type="password" name="access_key" value="<?php echo esc_attr($accessKey); ?>" />
                 </fieldset>
 
                 <fieldset class="wpstg-fieldset">
                     <label for="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-secret-key"><?php esc_html_e('Secret Key', 'wp-staging') ?></label>
-                    <input id="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-secret-key" class="wpstg-form-control" type="text" name="secret_key" value="<?php echo esc_attr($secretKey); ?>" style="min-width:300px;" />
+                    <input id="wpstg-storage-provider-<?php echo esc_attr($providerId); ?>-secret-key" class="wpstg-form-control" type="password" name="secret_key" value="<?php echo esc_attr($secretKey); ?>" style="min-width:300px;" />
                 </fieldset>
 
                 <fieldset class="wpstg-fieldset">

@@ -8,6 +8,9 @@ use WPStaging\Framework\Database\TableService;
 
 class DDLExporter extends AbstractExporter
 {
+    /** @var string */
+    const WPSTG_SQL_BACKUP_DUMP_HEADER = "-- WP Staging SQL Backup Dump\n";
+
     /** @var TableService */
     protected $tableService;
 
@@ -48,8 +51,8 @@ class DDLExporter extends AbstractExporter
         $this->filterOtherSubsitesTables();
 
         // Add views to bottom of the array to make sure they can be created. Views are based on tables. So tables need to be created before views
-        $tablesThenViews = array_merge($this->tables, $this->views);
-
+        $tablesThenViews   = array_merge($this->tables, $this->views);
+        $isMultisiteBackup = is_multisite() && !$this->isNetworkSiteBackup;
         foreach ($tablesThenViews as $tableOrView) {
             // Backup views
             if ($this->isView($tableOrView, $this->views)) {
@@ -61,7 +64,7 @@ class DDLExporter extends AbstractExporter
                 continue;
             }
 
-            $this->writeQueryCreateTable($tableOrView);
+            $this->writeQueryCreateTable($tableOrView, true, $isMultisiteBackup);
         }
 
         $this->addUsersTablesForSubsite();
@@ -69,7 +72,7 @@ class DDLExporter extends AbstractExporter
         $this->writeQueryNonWpTables();
 
         foreach ($this->viewDDLOrder->tryGetOrderedViews() as $viewName => $query) {
-            $this->writeQueryCreateViews($viewName, $query);
+            $this->writeQueryCreateViews($viewName, $query, $isMultisiteBackup);
         }
     }
 
@@ -261,12 +264,16 @@ class DDLExporter extends AbstractExporter
     }
 
     /**
-     * @param $tableName
-     * @param $createViewQuery
+     * @param string $tableName
+     * @param string $createViewQuery
+     * @param bool $isBaseView
      */
-    protected function writeQueryCreateViews($tableName, $createViewQuery)
+    protected function writeQueryCreateViews(string $tableName, string $createViewQuery, bool $isBaseView)
     {
         $prefixedTableName = $this->getPrefixedTableName($tableName);
+        if ($isBaseView) {
+            $prefixedTableName = $this->getPrefixedBaseTableName($tableName);
+        }
 
         $dropView = "\nDROP VIEW IF EXISTS `{$prefixedTableName}`;\n";
         $this->file->fwrite($dropView);
@@ -324,7 +331,7 @@ class DDLExporter extends AbstractExporter
     protected function getHeader()
     {
         return sprintf(
-            "-- WP Staging SQL Backup Dump\n" .
+            self::WPSTG_SQL_BACKUP_DUMP_HEADER .
             "-- https://wp-staging.com/\n" .
             "--\n" .
             "-- Host: %s\n" .

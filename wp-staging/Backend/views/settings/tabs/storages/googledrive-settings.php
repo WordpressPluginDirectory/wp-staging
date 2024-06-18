@@ -30,7 +30,8 @@ use WPStaging\Pro\Backup\Storage\Storages\GoogleDrive\Auth;
     $googleClientSecret = isset($options['googleClientSecret']) ? $options['googleClientSecret'] : '';
     ?>
     <p>
-        <strong class="wpstg-fs-14"> <?php echo esc_html($providerName); ?></strong>
+        <strong class="wpstg-fs-18"> <?php echo esc_html($providerName); ?></strong>
+        <br/>
         <br/>
         <?php echo esc_html__('Upload backup files to your personal Google Drive account.', 'wp-staging'); ?>
         <br>
@@ -64,8 +65,8 @@ use WPStaging\Pro\Backup\Storage\Storages\GoogleDrive\Auth;
                 <?php
             }
             ?>
-            <a href="<?php echo esc_url($authURL); ?>" id="wpstg_google_drive_connect" class="wpstg-btn-google"> <img src="<?php echo esc_url(WPSTG_PLUGIN_URL . 'assets/img/google-g.png'); ?>" /> <?php esc_html_e("Sign in with Google", "wp-staging") ?></a>
-            <span><?php esc_html_e("OR", "wp-staging") ?></span> &nbsp; <a onclick="WPStaging.handleToggleElement(this)" data-wpstg-target="#wpstg-custom-google-credentials" href="javascript:void(0);"><?php esc_html_e("Connect with API Credentials", "wp-staging") ?></a>
+            <a href="<?php echo esc_url($authURL); ?>" class="wpstg-btn-google"> <img class="wpstg--dashicons" src="<?php echo esc_url(WPSTG_PLUGIN_URL . 'assets/svg/vendor/dashicons/google-sign-in.svg'); ?>" alt="<?php esc_attr_e("Sign in with Google", "wp-staging") ?>"/></a>
+            <span><?php esc_html_e("OR", "wp-staging") ?></span> &nbsp; <a class="wpstg-ml-12px" onclick="WPStaging.handleToggleElement(this)" data-wpstg-target="#wpstg-custom-google-credentials" href="javascript:void(0);"><?php esc_html_e("Connect with API Credentials", "wp-staging") ?></a>
             <?php
         }
         ?>

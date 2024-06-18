@@ -24,6 +24,7 @@ use WPStaging\Framework\SiteInfo;
 use WPStaging\Framework\Utils\ServerVars;
 use WPStaging\Backup\Ajax\Restore\PrepareRestore;
 use WPStaging\Framework\Utils\Cache\Cache;
+use WPStaging\Framework\ThirdParty\Aios;
 
 /**
  * Show Admin Notices | Warnings | Messages
@@ -42,6 +43,9 @@ class Notices
 
     /** @var string */
     const BASIC_NOTICES_ACTION = 'wpstg.notices.show_basic_notices';
+
+    /** @var string */
+    const INJECT_ANALYTICS_CONSENT_ASSETS_ACTION = 'wpstg.assets.inject_analytics_consent_assets';
 
     /** @var Assets */
     private $assets;
@@ -223,6 +227,7 @@ class Notices
         $this->noticeShowDirectoryListingWarning($this->viewsNoticesPath);
         $this->noticeDbPrefixDoesNotExist();
         $this->noticeWPEnginePermalinkWarning();
+        $this->noticeAiosSaltPostfixEnabled();
     }
 
     /**
@@ -559,15 +564,23 @@ class Notices
             return;
         }
 
-        wp_enqueue_script(
-            "wpstg-show-analytics-modal",
-            WPSTG_PLUGIN_URL . './assets/js/dist/analytics-consent-modal.js'
-        );
-        wp_enqueue_style(
-            'wpstg-plugin-activation',
-            WPSTG_PLUGIN_URL . './assets/css/dist/analytics-consent-modal.css'
-        );
+        Hooks::doAction(self::INJECT_ANALYTICS_CONSENT_ASSETS_ACTION);
 
         require_once "{$this->getPluginPath()}/Backend/views/notices/analytics-modal.php";
+    }
+
+    /**
+     * @return void
+     */
+    private function noticeAiosSaltPostfixEnabled()
+    {
+        $aios = WPStaging::make(Aios::class);
+
+        // Execute it here to prevent this from being executed on each page request and to save db calls.
+        $aios->optimizerWhitelistUpdater();
+
+        if (self::SHOW_ALL_NOTICES || $aios->isSaltPostfixOptionEnabled()) {
+            require $this->viewsNoticesPath . "aios-salt-postfix-enabled.php";
+        }
     }
 }
