@@ -3,7 +3,6 @@
 namespace WPStaging\Backup\Dto\Job;
 
 use WPStaging\Backup\Dto\Interfaces\RemoteUploadDtoInterface;
-use WPStaging\Backup\Dto\JobDataDto;
 use WPStaging\Backup\Dto\Traits\IsExportingTrait;
 use WPStaging\Backup\Dto\Traits\IsExcludingTrait;
 use WPStaging\Backup\Dto\Traits\RemoteUploadTrait;
@@ -11,6 +10,7 @@ use WPStaging\Backup\Entity\BackupMetadata;
 use WPStaging\Backup\Service\ZlibCompressor;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Facades\Hooks;
+use WPStaging\Framework\Job\Dto\JobDataDto;
 
 class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
 {
@@ -137,6 +137,9 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
 
     /** @var int */
     private $filePartIndex = 0;
+
+    /** @var bool */
+    private $isContaining2GBFile = false;
 
     /**
      * @return string|null
@@ -807,5 +810,22 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     public function getIsCompressedBackup(): bool
     {
         return WPStaging::make(ZlibCompressor::class)->isCompressionEnabled();
+    }
+
+    /**
+     * @return bool
+     */
+    public function getIsContaining2GBFile(): bool
+    {
+        return $this->isContaining2GBFile;
+    }
+
+    /**
+     * @param bool $isContaining2GBFile
+     * @return void
+     */
+    public function setIsContaining2GBFile(bool $isContaining2GBFile)
+    {
+        $this->isContaining2GBFile = $isContaining2GBFile;
     }
 }

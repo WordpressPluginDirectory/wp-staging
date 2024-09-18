@@ -3,14 +3,15 @@
 namespace WPStaging\Backup;
 
 use DateTime;
-use WPStaging\Core\WPStaging;
-use WPStaging\Framework\Facades\Sanitize;
-use WPStaging\Framework\Security\Capabilities;
-use WPStaging\Framework\Security\Nonce;
 use WPStaging\Backup\BackgroundProcessing\Backup\PrepareBackup;
 use WPStaging\Backup\Dto\Job\JobBackupDataDto;
 use WPStaging\Backup\Service\BackupsFinder;
+use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Facades\Escape;
+use WPStaging\Framework\Facades\Sanitize;
+use WPStaging\Framework\Job\ProcessLock;
+use WPStaging\Framework\Security\Capabilities;
+use WPStaging\Framework\Security\Nonce;
 use WPStaging\Framework\Utils\ServerVars;
 use WPStaging\Notifications\Notifications;
 
@@ -42,7 +43,7 @@ class BackupScheduler
     /** @var BackupsFinder */
     protected $backupsFinder;
 
-    /** @var BackupProcessLock */
+    /** @var ProcessLock */
     protected $processLock;
 
     /** @var BackupDeleter */
@@ -64,11 +65,11 @@ class BackupScheduler
 
     /**
      * @param BackupsFinder $backupsFinder
-     * @param BackupProcessLock $processLock
+     * @param ProcessLock $processLock
      * @param BackupDeleter $backupDeleter
      * @param Notifications $notifications
      */
-    public function __construct(BackupsFinder $backupsFinder, BackupProcessLock $processLock, BackupDeleter $backupDeleter, Notifications $notifications)
+    public function __construct(BackupsFinder $backupsFinder, ProcessLock $processLock, BackupDeleter $backupDeleter, Notifications $notifications)
     {
         $this->backupsFinder = $backupsFinder;
         $this->processLock   = $processLock;
@@ -245,7 +246,6 @@ class BackupScheduler
         // Cron is hell to debug, so let's log everything that happens.
         $logId = wp_generate_password(4, false);
 
-        debug_log("[Schedule Backup Cron - $logId] Received request to create a backup using Cron. Backup Data: " . wp_json_encode($backupData), 'info', false);
         debug_log(sprintf("[Schedule Backup Cron - %s] Received request to create a backup using Cron. Backup Data: %s", $logId, wp_json_encode($backupData)), 'info', false);
 
         try {

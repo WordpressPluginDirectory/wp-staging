@@ -4,9 +4,9 @@ namespace WPStaging\Backup\Service;
 
 use WPStaging\Backup\Dto\Job\JobBackupDataDto;
 use WPStaging\Backup\Dto\Service\ArchiverDto;
-use WPStaging\Backup\Dto\StepsDto;
+use WPStaging\Framework\Job\Dto\StepsDto;
 use WPStaging\Backup\Exceptions\BackupSkipItemException;
-use WPStaging\Backup\Exceptions\DiskNotWritableException;
+use WPStaging\Framework\Job\Exception\DiskNotWritableException;
 use WPStaging\Backup\Task\Tasks\JobBackup\FilesystemScannerTask;
 use WPStaging\Framework\Filesystem\Filesystem;
 use WPStaging\Framework\Queue\FinishedQueueException;
@@ -104,7 +104,10 @@ class FileBackupService implements ServiceInterface
 
                 return;
             } catch (DiskNotWritableException $exception) {
-                // Probably disk full. No-op, as this is handled elsewhere.
+                // Probably disk full. Should be handled in Job\AbstractJob::prepareAndExecute(). Let's stop the code here if it did not happen!
+                throw new \Exception('Disk is probably full. Error message: ' . $exception->getMessage());
+            } catch (\Throwable $th) {
+                throw new \Exception('Fail to create backup. Error message: ' . $th->getMessage());
             }
         }
 
@@ -162,6 +165,8 @@ class FileBackupService implements ServiceInterface
         } catch (\RuntimeException $e) {
             debug_log("Backup error: cannot append file to backup: $path");
             $isFileWrittenCompletely = null;
+        } catch (\Throwable $th) {
+            throw $th;
         }
 
         // Done processing this file

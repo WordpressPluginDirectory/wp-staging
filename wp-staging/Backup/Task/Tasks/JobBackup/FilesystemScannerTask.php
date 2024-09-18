@@ -9,7 +9,7 @@ namespace WPStaging\Backup\Task\Tasks\JobBackup;
 use DirectoryIterator;
 use Exception;
 use SplFileInfo;
-use WPStaging\Backup\Dto\TaskResponseDto;
+use WPStaging\Framework\Job\Dto\TaskResponseDto;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Adapter\Directory;
 use WPStaging\Framework\Filesystem\DiskWriteCheck;
@@ -19,8 +19,9 @@ use WPStaging\Framework\Filesystem\FilterableDirectoryIterator;
 use WPStaging\Framework\Filesystem\PathIdentifier;
 use WPStaging\Framework\Queue\SeekableQueueInterface;
 use WPStaging\Framework\Traits\EndOfLinePlaceholderTrait;
-use WPStaging\Backup\Dto\StepsDto;
-use WPStaging\Backup\Exceptions\DiskNotWritableException;
+use WPStaging\Framework\Job\Dto\StepsDto;
+use WPStaging\Framework\Job\Exception\DiskNotWritableException;
+use WPStaging\Framework\Filesystem\PartIdentifier;
 use WPStaging\Backup\Task\BackupTask;
 use WPStaging\Vendor\Psr\Log\LoggerInterface;
 use WPStaging\Framework\Queue\FinishedQueueException;
@@ -159,7 +160,7 @@ class FilesystemScannerTask extends BackupTask
         $this->setupFilesystemScanner();
 
         if ($this->stepsDto->getCurrent() === self::STEP_BACKUP_OTHER_WP_CONTENT_FILES) {
-            $this->currentPathScanning = BackupOtherFilesTask::IDENTIFIER;
+            $this->currentPathScanning = PartIdentifier::OTHER_WP_CONTENT_PART_IDENTIFIER;
             $this->setupFileBackupQueue();
             $this->scanWpContentDirectory();
             $this->unlockQueue();
@@ -167,7 +168,7 @@ class FilesystemScannerTask extends BackupTask
         }
 
         if ($this->stepsDto->getCurrent() === self::STEP_BACKUP_PLUGINS_FILES) {
-            $this->currentPathScanning = BackupPluginsTask::IDENTIFIER;
+            $this->currentPathScanning = PartIdentifier::PLUGIN_PART_IDENTIFIER;
             $this->setupFileBackupQueue();
             $this->scanPluginsDirectories();
             $this->unlockQueue();
@@ -175,7 +176,7 @@ class FilesystemScannerTask extends BackupTask
         }
 
         if ($this->stepsDto->getCurrent() === self::STEP_BACKUP_MU_PLUGINS_FILES) {
-            $this->currentPathScanning = BackupMuPluginsTask::IDENTIFIER;
+            $this->currentPathScanning = PartIdentifier::MU_PLUGIN_PART_IDENTIFIER;
             $this->setupFileBackupQueue();
             $this->scanMuPluginsDirectory();
             $this->unlockQueue();
@@ -183,7 +184,7 @@ class FilesystemScannerTask extends BackupTask
         }
 
         if ($this->stepsDto->getCurrent() === self::STEP_BACKUP_THEMES_FILES) {
-            $this->currentPathScanning = BackupThemesTask::IDENTIFIER;
+            $this->currentPathScanning = PartIdentifier::THEME_PART_IDENTIFIER;
             $this->setupFileBackupQueue();
             $this->scanThemesDirectory();
             $this->unlockQueue();
@@ -191,7 +192,7 @@ class FilesystemScannerTask extends BackupTask
         }
 
         if ($this->stepsDto->getCurrent() === self::STEP_BACKUP_UPLOADS_FILES) {
-            $this->currentPathScanning = BackupUploadsTask::IDENTIFIER;
+            $this->currentPathScanning = PartIdentifier::UPLOAD_PART_IDENTIFIER;
             $this->setupFileBackupQueue();
             $this->scanUploadsDirectory();
             $this->unlockQueue();
@@ -208,7 +209,7 @@ class FilesystemScannerTask extends BackupTask
 
         if ($this->stepsDto->isFinished()) {
             $this->stepsDto->setManualPercentage(100);
-            $this->logger->info(sprintf(__('Finished discovering Files. (%d files)', 'wp-staging'), $this->jobDataDto->getDiscoveredFiles()));
+            $this->logger->info(sprintf('Finished discovering Files. (%d files)', $this->jobDataDto->getDiscoveredFiles()));
         } else {
             $this->jobDataDto->setDiscoveringFilesRequests($this->jobDataDto->getDiscoveringFilesRequests() + 1);
 
@@ -226,7 +227,7 @@ class FilesystemScannerTask extends BackupTask
             }
 
             $this->stepsDto->setManualPercentage(min($manualPercentage, 100));
-            $this->logger->info(sprintf(__('Discovering Files (%d files)', 'wp-staging'), $this->jobDataDto->getDiscoveredFiles()));
+            $this->logger->info(sprintf('Discovering Files (%d files)', $this->jobDataDto->getDiscoveredFiles()));
         }
 
         return $this->generateResponse(false);
@@ -361,11 +362,6 @@ class FilesystemScannerTask extends BackupTask
         }, $this->getExcludedDirectories());
 
         $this->jobDataDto->setExcludedDirectories($excludedDirs);
-
-        // Browsers will do mime type sniffing on download. Adding binary to header avoids parsing as text/plain and forces download.
-        //if (!$this->jobDataDto->getIsMultipartBackup()) {
-        //    $this->enqueueFileInBackup(new \SplFileInfo(WPSTG_PLUGIN_DIR . 'Backup/wpstgBackupHeader.txt'));
-        //}
 
         $this->stepsDto->setTotal(self::TOTAL_STEPS);
         $this->taskQueue->seek(0);
@@ -612,10 +608,10 @@ class FilesystemScannerTask extends BackupTask
         if ($this->canExcludeLogFile($fileExtension) || $this->canExcludeCacheFile($fileExtension) || isset($this->ignoreFileExtensions[$fileExtension])) {
             // Early bail: File has an ignored extension
             $this->logger->info(sprintf(
-                __('%s: Skipped file "%s." Extension "%s" is excluded by rule.', 'wp-staging'),
+                '%s: Skipped file "%s." Extension "%s" is excluded by rule.',
                 static::getTaskTitle(),
-                $relativePath,
-                $fileExtension
+                esc_html($relativePath),
+                esc_html($fileExtension)
             ));
 
             return;
@@ -625,11 +621,11 @@ class FilesystemScannerTask extends BackupTask
             if ($fileSize > $this->ignoreFileExtensionFilesBiggerThan[$fileExtension]) {
                 // Early bail: File bigger than expected for given extension
                 $this->logger->info(sprintf(
-                    __('%s: Skipped file "%s" (%s). It exceeds the maximum allowed file size for files with the extension "%s" (%s).', 'wp-staging'),
+                    '%s: Skipped file "%s" (%s). It exceeds the maximum allowed file size for files with the extension "%s" (%s).',
                     static::getTaskTitle(),
-                    $relativePath,
+                    esc_html($relativePath),
                     size_format($fileSize),
-                    $fileExtension,
+                    esc_html($fileExtension),
                     size_format($this->ignoreFileExtensionFilesBiggerThan[$fileExtension])
                 ));
 
@@ -638,9 +634,9 @@ class FilesystemScannerTask extends BackupTask
         } elseif ($fileSize > $this->ignoreFileBiggerThan) {
             // Early bail: File is larger than max allowed size.
             $this->logger->info(sprintf(
-                __('%s: Skipped file "%s" (%s). It exceeds the maximum file size for backup (%s).', 'wp-staging'),
+                '%s: Skipped file "%s" (%s). It exceeds the maximum file size for backup (%s).',
                 static::getTaskTitle(),
-                $relativePath,
+                esc_html($relativePath),
                 size_format($fileSize),
                 size_format($this->ignoreFileBiggerThan)
             ));
@@ -720,7 +716,7 @@ class FilesystemScannerTask extends BackupTask
         }
 
         $this->logger->info(sprintf(
-            __('%s: Skipped directory "%s". Excluded by smart exclusion rule: Excluding cache folder.', 'wp-staging'),
+            '%s: Skipped directory "%s". Excluded by smart exclusion rule: Excluding cache folder.',
             static::getTaskTitle(),
             $dir->getRealPath()
         ));
@@ -875,9 +871,9 @@ class FilesystemScannerTask extends BackupTask
             $relativePathForLogging = str_replace($this->filesystem->normalizePath(WP_CONTENT_DIR, true), '', $normalizedPath);
 
             $this->logger->info(sprintf(
-                __('%s: Skipped directory "%s". Excluded by rule', 'wp-staging'),
+                '%s: Skipped directory "%s". Excluded by rule',
                 static::getTaskTitle(),
-                $relativePathForLogging
+                esc_html($relativePathForLogging)
             ));
 
             return true;

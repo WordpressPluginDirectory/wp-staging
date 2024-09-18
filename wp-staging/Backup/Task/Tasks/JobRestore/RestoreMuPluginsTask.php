@@ -2,6 +2,7 @@
 
 namespace WPStaging\Backup\Task\Tasks\JobRestore;
 
+use WPStaging\Framework\Filesystem\PartIdentifier;
 use WPStaging\Framework\Filesystem\PathIdentifier;
 use WPStaging\Backup\Task\FileRestoreTask;
 use WPStaging\Framework\Facades\Hooks;
@@ -12,29 +13,37 @@ class RestoreMuPluginsTask extends FileRestoreTask
     const FILTER_REPLACE_EXISTING_MUPLUGINS = 'wpstg.backup.restore.replace_existing_mu_plugins';
 
     /**
-     * Old filter, cannot me renamed to new pattern
+     * Old filter, cannot be renamed to new pattern
      * @var string
      */
     const FILTER_KEEP_EXISTING_MUPLUGINS = 'wpstg.backup.restore.keepExistingMuPlugins';
 
-    public static function getTaskName()
+    public static function getTaskName(): string
     {
         return 'backup_restore_muplugins';
     }
 
-    public static function getTaskTitle()
+    public static function getTaskTitle(): string
     {
         return 'Restoring Mu-Plugins';
     }
 
+    protected function isSkipped(): bool
+    {
+        return $this->isBackupPartSkipped(PartIdentifier::MU_PLUGIN_PART_IDENTIFIER);
+    }
+
     /**
-     * @inheritDoc
+     * @return array
      */
-    protected function getParts()
+    protected function getParts(): array
     {
         return $this->jobDataDto->getBackupMetadata()->getMultipartMetadata()->getMuPluginsParts();
     }
 
+    /**
+     * @return void
+     */
     protected function buildQueue()
     {
         try {
@@ -51,7 +60,7 @@ class RestoreMuPluginsTask extends FileRestoreTask
         } catch (\Exception $e) {
             $this->logger->critical(
                 sprintf(
-                    esc_html__('Destination mu-plugins folder could not be found nor created at "%s"', 'wp-stating'),
+                    esc_html('Destination mu-plugins folder could not be found nor created at "%s"'),
                     esc_html((string)apply_filters('wpstg.import.muPlugins.destDir', $destDir))
                 )
             );
@@ -113,7 +122,7 @@ class RestoreMuPluginsTask extends FileRestoreTask
     /**
      * @return array An array of paths of mu-plugins to restore.
      */
-    private function getMuPluginsToRestore()
+    private function getMuPluginsToRestore(): array
     {
         $tmpDir = $this->jobDataDto->getTmpDirectory() . PathIdentifier::IDENTIFIER_MUPLUGINS;
 
@@ -123,7 +132,7 @@ class RestoreMuPluginsTask extends FileRestoreTask
     /**
      * @return array An array of paths of existing mu-plugins.
      */
-    private function getExistingMuPlugins()
+    private function getExistingMuPlugins(): array
     {
         $destDir = $this->directory->getMuPluginsDirectory();
         $destDir = (string)apply_filters('wpstg.import.muPlugins.destDir', $destDir);
@@ -143,7 +152,7 @@ class RestoreMuPluginsTask extends FileRestoreTask
      * @return array An array of paths of mu-plugins found in the root of given directory,
      *               where the index is the name of the mu-plugin, and the value it's path.
      */
-    private function findMuPluginsInDir($path)
+    private function findMuPluginsInDir(string $path): array
     {
         $it = @new \DirectoryIterator($path);
 

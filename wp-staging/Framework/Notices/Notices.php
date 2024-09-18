@@ -13,13 +13,13 @@ use WPStaging\Framework\CloningProcess\ExcludedPlugins;
 use WPStaging\Framework\Database\WpOptionsInfo;
 use WPStaging\Framework\Facades\Hooks;
 use WPStaging\Framework\Security\Capabilities;
-use WPStaging\Framework\Staging\CloneOptions;
-use WPStaging\Framework\Staging\FirstRun;
+use WPStaging\Staging\CloneOptions;
+use WPStaging\Staging\FirstRun;
 use WPStaging\Framework\ThirdParty\FreemiusScript;
 use WPStaging\Framework\ThirdParty\Jetpack;
 use WPStaging\Framework\ThirdParty\WordFence;
 use WPStaging\Framework\Traits\NoticesTrait;
-use WPStaging\Framework\Staging\Sites;
+use WPStaging\Staging\Sites;
 use WPStaging\Framework\SiteInfo;
 use WPStaging\Framework\Utils\ServerVars;
 use WPStaging\Backup\Ajax\Restore\PrepareRestore;
@@ -118,7 +118,7 @@ class Notices
     public function __construct(Assets $assets)
     {
         $this->assets           = $assets;
-        $this->viewsNoticesPath = trailingslashit($this->getPluginPath()) . "Backend/views/notices/";
+        $this->viewsNoticesPath = WPSTG_VIEWS_DIR . "notices/";
 
         // To avoid dependency hell and smooth transition we will be using service locator for below dependencies
         $this->dirUtil         = WPStaging::make(Directory::class);
@@ -566,7 +566,7 @@ class Notices
 
         Hooks::doAction(self::INJECT_ANALYTICS_CONSENT_ASSETS_ACTION);
 
-        require_once "{$this->getPluginPath()}/Backend/views/notices/analytics-modal.php";
+        require_once WPSTG_VIEWS_DIR . "notices/analytics-modal.php";
     }
 
     /**

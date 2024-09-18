@@ -2,6 +2,7 @@
 
 namespace WPStaging\Backup\Task\Tasks\JobRestore;
 
+use WPStaging\Framework\Filesystem\PartIdentifier;
 use WPStaging\Framework\Filesystem\PathIdentifier;
 use WPStaging\Backup\Task\FileRestoreTask;
 use WPStaging\Framework\Facades\Hooks;
@@ -12,25 +13,30 @@ class RestoreThemesTask extends FileRestoreTask
     const FILTER_REPLACE_EXISTING_THEMES = 'wpstg.backup.restore.replace_existing_themes';
 
     /**
-     * Old filter, cannot me renamed to new pattern
+     * Old filter, cannot be renamed to new pattern
      * @var string
      */
     const FILTER_KEEP_EXISTING_THEMES = 'wpstg.backup.restore.keepExistingThemes';
 
-    public static function getTaskName()
+    public static function getTaskName(): string
     {
         return 'backup_restore_themes';
     }
 
-    public static function getTaskTitle()
+    public static function getTaskTitle(): string
     {
         return 'Restoring Themes';
     }
 
+    protected function isSkipped(): bool
+    {
+        return $this->isBackupPartSkipped(PartIdentifier::THEME_PART_IDENTIFIER);
+    }
+
     /**
-     * @inheritDoc
+     * @return array
      */
-    protected function getParts()
+    protected function getParts(): array
     {
         return $this->jobDataDto->getBackupMetadata()->getMultipartMetadata()->getThemesParts();
     }
@@ -49,7 +55,7 @@ class RestoreThemesTask extends FileRestoreTask
         try {
             $existingThemes = $this->getExistingThemes();
         } catch (\Exception $e) {
-            $this->logger->critical(sprintf(__('Destination themes folder could not be found or created at "%s"', 'wp-staging'), (string)apply_filters('wpstg.import.themes.destDir', $destDir)));
+            $this->logger->critical(sprintf('Destination themes folder could not be found or created at "%s"', (string)apply_filters('wpstg.import.themes.destDir', $destDir)));
 
             return;
         }
