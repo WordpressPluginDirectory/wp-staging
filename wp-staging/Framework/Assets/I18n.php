@@ -126,8 +126,8 @@ class I18n
                 'help_content_pro' => esc_html__('Please contact WP Staging support if you need further assistance.', 'wp-staging'),
             ],
             'admin_step_buttons' => [
-                'popup_title' => esc_html__('Do you want to proceed?', 'wp-staging'),
-                'popup_html' => sprintf(esc_html__('This will overwrite the staging site "{URL}" and will lead to loose of your staging sites modifications.%sThis is a final warning. Do not stop the update process once it starts, as that may break your staging site.%sClick on %scancel%s if you don\'t want to update the staging site.', 'wp-staging'), '<br><br><b>', '</b><br><br>', '<b>', '</b>'),
+                'popup_title' => esc_html__('Do You Want to Proceed?', 'wp-staging'),
+                'popup_html' => sprintf(esc_html__('This will overwrite the staging site "%s" and will lead to loose of your staging sites modifications.%sThis is a final warning. Do not stop the update process once it starts, as that may break your staging site.%sClick on %scancel%s if you don\'t want to update the staging site.', 'wp-staging'), '<b>{URL}</b>', '<br><br><b>', '</b><br><br>', '<b>', '</b>'),
                 'confirm_button_text' => esc_html__('Update', 'wp-staging'),
             ],
             'admin_verify_external_database' => [
@@ -139,6 +139,8 @@ class I18n
                 'error_modal_title' => esc_html__('Different Database Properties', 'wp-staging'),
                 'error_modal_confirm_button_text' => esc_html__('Proceed', 'wp-staging'),
                 'insufficient_db_privilege_title' => esc_html__('Insufficient Database Privileges', 'wp-staging'),
+                'show_full_message' => esc_html__('Show Full Message', 'wp-staging'),
+                'hide_full_message' => esc_html__('Hide Full Message', 'wp-staging'),
             ],
             'admin_send_cloning_ajax' => [
                 'error_general' => sprintf(esc_html__('Something went wrong!%sGo to WP Staging > Settings and lower \'File Copy Limit\' and \'DB Query Limit\'. Also set \'CPU Load Priority to low \' and try again. If that does not help, %s', 'wp-staging'), '<br/><br/>', '<a href=\'https://wp-staging.com/support/\' target=\'_blank\'>open a support ticket</a>'),
@@ -212,7 +214,7 @@ class I18n
             ],
             'backup_delete' => [
                 'delete_html' => esc_html__('Do you want to delete the backup', 'wp-staging'),
-                'delete_title' => esc_html__('Delete Backup?', 'wp-staging'),
+                'delete_title' => esc_html__('Delete Backup', 'wp-staging'),
             ],
             'backup_download' => [
                 'render_part_html_file_size' => esc_html__('File Size', 'wp-staging'),

@@ -1,44 +1,49 @@
 <?php
 
-namespace WPStaging\Staging\BackgroundProcessing;
+/**
+ * DRY the logic needed to prepare a job for background processing.
+ *
+ * @package WPStaging\Framework\BackgroundProcessing\Job
+ */
+
+namespace WPStaging\Framework\BackgroundProcessing\Job;
 
 use Exception;
 use WP_Error;
+use WPStaging\Backup\BackupScheduler;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\BackgroundProcessing\Action;
 use WPStaging\Framework\BackgroundProcessing\Exceptions\QueueException;
 use WPStaging\Framework\BackgroundProcessing\Queue;
 use WPStaging\Framework\BackgroundProcessing\QueueActionAware;
+use WPStaging\Framework\Job\AbstractJob;
+use WPStaging\Framework\Job\Ajax\PrepareJob as AjaxPrepareJob;
 use WPStaging\Framework\Job\Dto\TaskResponseDto;
 use WPStaging\Framework\Job\Exception\ProcessLockedException;
 use WPStaging\Framework\Job\ProcessLock;
 use WPStaging\Framework\Traits\ResourceTrait;
 use WPStaging\Framework\Utils\Times;
-use WPStaging\Staging\Ajax\Delete\PrepareDelete as AjaxPrepareDelete;
-use WPStaging\Staging\Jobs\StagingSiteDelete;
 
 use function WPStaging\functions\debug_log;
 
 /**
- * Class PrepareDelete
- * Prepares a Staging Site Delete Job to be executed using Background Processing.
+ * Class PrepareJob
  *
- * @package WPStaging\Staging\BackgroundProcessing
+ * @package WPStaging\Framework\BackgroundProcessing\Job
+ *
  */
-class PrepareDelete
+abstract class PrepareJob
 {
     use ResourceTrait;
     use QueueActionAware;
 
-    /**
-     * A reference to the class that handles staging site "Delete" processing when triggered by AJAX actions.
-     *
-     * @var AjaxPrepareDelete
-     */
-    private $ajaxPrepareDelete;
+    /** @var AbstractJob */
+    protected $job;
 
-    /** @var StagingSiteDelete */
-    private $jobDelete;
+    /**
+     * @var AjaxPrepareJob
+     */
+    private $ajaxPrepareJob;
 
     /**
      * A reference to the instance of the Queue manager the class should use for processing.
@@ -64,9 +69,7 @@ class PrepareDelete
     private $times;
 
     /**
-     * PrepareDelete constructor.
-     *
-     * @param AjaxPrepareDelete $ajaxPrepareDelete A reference to the object currently handling
+     * @param AjaxPrepareJob $ajaxPrepareJob A reference to the object currently handling
      *                                             AJAX Delete preparation requests.
      * @param Queue             $queue             A reference to the instance of the Queue manager the class
      *                                             should use for processing.
@@ -74,12 +77,12 @@ class PrepareDelete
      *                                             to prevent concurrent processing of the job requests.
      * @param Times             $times             A reference to the Times utility class.
      */
-    public function __construct(AjaxPrepareDelete $ajaxPrepareDelete, Queue $queue, ProcessLock $processLock, Times $times)
+    public function __construct(AjaxPrepareJob $ajaxPrepareJob, Queue $queue, ProcessLock $processLock, Times $times)
     {
-        $this->ajaxPrepareDelete = $ajaxPrepareDelete;
-        $this->queue             = $queue;
-        $this->processLock       = $processLock;
-        $this->times             = $times;
+        $this->ajaxPrepareJob = $ajaxPrepareJob;
+        $this->queue          = $queue;
+        $this->processLock    = $processLock;
+        $this->times          = $times;
     }
 
     /**
@@ -95,8 +98,8 @@ class PrepareDelete
 
         try {
             $data     = (array)wp_parse_args((array)$data, $this->getDefaultDataConfiguration());
-            $prepared = $this->ajaxPrepareDelete->validateAndSanitizeData($data);
-            $name     = empty($prepared['name']) ? 'Background Processing Delete' : $prepared['name'];
+            $prepared = $this->ajaxPrepareJob->validateAndSanitizeData($data);
+            $name     = empty($prepared['name']) ? $this->getJobDefaultName() : $prepared['name'];
             $jobId    = uniqid($name . '_', true);
 
             $data['jobId'] = $jobId;
@@ -129,7 +132,7 @@ class PrepareDelete
 
         $action   = $this->getCurrentAction();
         $priority = $action === null ? 0 : $action->priority - 1;
-        $actionId = $this->queue->enqueueAction(self::class . '::' . 'act', $args, $args['jobId'], $priority);
+        $actionId = $this->queue->enqueueAction(static::class . '::' . 'act', $args, $args['jobId'], $priority);
 
         if ($actionId === false || !$this->queue->getAction($actionId) instanceof Action) {
             throw new QueueException('Delete background processing action could not be queued.');
@@ -160,26 +163,19 @@ class PrepareDelete
             return new WP_Error(400, $e->getMessage());
         }
 
-        if ($args['isInit']) {
-            debug_log('[Schedule] Configuring JOB DATA DTO', 'info', false);
-            $prepareDelete = WPStaging::make(AjaxPrepareDelete::class);
-            $prepareDelete->prepare($args);
-            $this->jobDelete = $prepareDelete->getStagingSiteDelete();
-        } else {
-            $this->jobDelete = WPStaging::make(StagingSiteDelete::class);
-        }
+        $this->maybeInitJob($args);
 
         $args['isInit'] = false;
 
         $taskResponseDto = null;
 
-        debug_log('[Schedule Job Data DTO]: ' . json_encode($this->jobDelete->getJobDataDto()), 'info', false);
+        debug_log('[Schedule Job Data DTO]: ' . json_encode($this->job->getJobDataDto()), 'info', false);
 
         do {
             try {
                 /** @see WPStaging\Framework\Job\AbstractJob::prepareAndExecute() */
-                $taskResponseDto = $this->jobDelete->prepareAndExecute();
-                $this->jobDelete->persist();
+                $taskResponseDto = $this->job->prepareAndExecute();
+                $this->job->persist();
                 $this->persistDtoToAction($this->getCurrentAction(), $taskResponseDto);
             } catch (Exception $e) {
                 error_log('Action for ' . $args['jobId'] . ' failed: ' . $e->getMessage());
@@ -190,18 +186,18 @@ class PrepareDelete
                 return new WP_Error(400, $e->getMessage());
             }
 
-
             $errorMessage    = $this->getLastErrorMessage();
             if ($errorMessage !== false) {
                 $this->processLock->unlockProcess();
                 $body = '';
+                $job  = $this->getIsBackupJob() ? 'backup' : 'job';
                 if (array_key_exists('scheduleId', $args)) {
-                    $body .= 'Error in scheduled Delete' . PHP_EOL . PHP_EOL;
+                    $body .= 'Error in scheduled ' . $job . PHP_EOL . PHP_EOL;
                 } else {
-                    $body .= 'Error in background Delete' . PHP_EOL . PHP_EOL;
+                    $body .= 'Error in background ' . $job . PHP_EOL . PHP_EOL;
                 }
 
-                $jobDataDto = $this->jobDelete->getJobDataDto();
+                $jobDataDto = $this->job->getJobDataDto();
                 $date = new \DateTime();
                 $date->setTimestamp($jobDataDto->getStartTime());
                 $jobDuration = str_replace(['minutes', 'seconds'], ['min', 'sec'], $this->times->getHumanReadableDuration(gmdate('i:s', $jobDataDto->getDuration())));
@@ -210,6 +206,12 @@ class PrepareDelete
                 $body .= 'Duration: ' . $jobDuration . PHP_EOL;
                 $body .= 'Job ID: ' . $args['jobId'] . PHP_EOL . PHP_EOL;
                 $body .= 'Error Message: ' . $errorMessage;
+
+                if ($this->getIsBackupJob()) {
+                    /** @var BackupScheduler */
+                    $backupScheduler = WPStaging::make(BackupScheduler::class);
+                    $backupScheduler->sendErrorReport($body);
+                }
 
                 return new WP_Error(400, $errorMessage);
             }
@@ -250,7 +252,7 @@ class PrepareDelete
      */
     public function persist()
     {
-        return $this->ajaxPrepareDelete->persist();
+        return $this->ajaxPrepareJob->persist();
     }
 
     /**
@@ -272,19 +274,18 @@ class PrepareDelete
         }
     }
 
-    /**
-     * Returns the default data configuration that will be used to prepare a Delete using
-     * default settings.
-     *
-     * @return array<string,bool> The Delete preparation default settings.
-     */
-    public function getDefaultDataConfiguration()
+    abstract public function getDefaultDataConfiguration(): array;
+
+    abstract protected function maybeInitJob(array $args);
+
+    protected function getIsBackupJob(): bool
     {
-        return [
-            'isDeletingTables' => false,
-            'isDeletingFiles'  => false,
-            'excludedTables'   => [],
-        ];
+        return false;
+    }
+
+    protected function getJobDefaultName(): string
+    {
+        return 'BackgroundJob';
     }
 
     /**
@@ -304,7 +305,7 @@ class PrepareDelete
                 return;
             }
 
-            $logFile = $this->jobDelete->getCurrentTask()->getLogger()->getFileName();
+            $logFile = $this->job->getCurrentTask()->getLogger()->getFileName();
             $this->queue->updateActionFields($action->id, ['custom' => $logFile, 'response' => serialize($dto)], true);
 
             $errorMessage = $this->getLastErrorMessage();
@@ -321,7 +322,7 @@ class PrepareDelete
      */
     private function getLastErrorMessage()
     {
-        $error = $this->jobDelete->getCurrentTask()->getLogger()->getLastErrorMsg();
+        $error = $this->job->getCurrentTask()->getLogger()->getLastErrorMsg();
 
         if ($error === false) {
             return false;
