@@ -10,6 +10,12 @@ class JobRestoreDataDto extends JobDataDto
     /** @var string */
     private $file;
 
+    /** @var string */
+    private $dataUrl = '';
+
+    /** @var bool */
+    private $isDataDownloaded = false;
+
     /** @var BackupMetadata|null */
     private $backupMetadata;
 
@@ -64,13 +70,6 @@ class JobRestoreDataDto extends JobDataDto
     private $currentFileHeaderStart = 0;
 
     /**
-     * If a SQL query returns 0 due to mysql timeout count the failed attempts
-     * in this property to increase the execution time
-     * @var int
-     */
-    private $numberOfQueryAttemptsWithZeroResult = 0;
-
-    /**
      * Current execution time in sec for database restore
      * @var int
      */
@@ -115,6 +114,40 @@ class JobRestoreDataDto extends JobDataDto
     public function setFile(string $file)
     {
         $this->file = untrailingslashit(wp_normalize_path($file));
+    }
+
+    /**
+     * @return string
+     */
+    public function getDataUrl(): string
+    {
+        return $this->dataUrl;
+    }
+
+    /**
+     * @param string $dataUrl
+     * @return void
+     */
+    public function setDataUrl(string $dataUrl)
+    {
+        $this->dataUrl = $dataUrl;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getIsDataDownloaded(): bool
+    {
+        return $this->isDataDownloaded;
+    }
+
+    /**
+     * @param bool $isDataDownloaded
+     * @return void
+     */
+    public function setIsDataDownloaded(bool $isDataDownloaded)
+    {
+        $this->isDataDownloaded = $isDataDownloaded;
     }
 
     /**
@@ -467,39 +500,6 @@ class JobRestoreDataDto extends JobDataDto
     public function setCurrentFileHeaderStart($headerStart = 0)
     {
         $this->currentFileHeaderStart = $headerStart;
-    }
-
-    /**
-     * @return int
-     */
-    public function getNumberOfQueryAttemptsWithZeroResult(): int
-    {
-        return $this->numberOfQueryAttemptsWithZeroResult;
-    }
-
-    /**
-     * @return void
-     */
-    public function incrementNumberOfQueryAttemptsWithZeroResult()
-    {
-        $this->numberOfQueryAttemptsWithZeroResult++;
-    }
-
-    /**
-     * @return void
-     */
-    public function resetNumberOfQueryAttemptsWithZeroResult()
-    {
-        $this->numberOfQueryAttemptsWithZeroResult = 0;
-    }
-
-    /**
-     * @param int $numberOfQueryAttemptsWithZeroResult
-     * @return void
-     */
-    public function setNumberOfQueryAttemptsWithZeroResult(int $numberOfQueryAttemptsWithZeroResult = 0)
-    {
-        $this->numberOfQueryAttemptsWithZeroResult = $numberOfQueryAttemptsWithZeroResult;
     }
 
     /**

@@ -257,6 +257,12 @@ abstract class AbstractBackupMetadata implements \JsonSerializable
             }
         }
 
+        /**
+         * before hydrate set the backup version to empty,
+         * to avoid populating it with latest backup version where backupVersion field was not available
+         */
+        $this->setBackupVersion('');
+
         $this->traitHydrate($data);
 
         return $this; // @phpstan-ignore-line
@@ -1228,5 +1234,13 @@ abstract class AbstractBackupMetadata implements \JsonSerializable
     public function getIsMultisiteBackup(): bool
     {
         return $this->backupType !== self::BACKUP_TYPE_SINGLE;
+    }
+
+    /**
+     * @return void
+     */
+    public function revertBackupSizeToDefault()
+    {
+        $this->backupSize = '';
     }
 }

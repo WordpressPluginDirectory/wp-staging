@@ -14,6 +14,7 @@ use WPStaging\Vendor\Psr\Log\LoggerInterface;
 use WPStaging\Framework\Utils\Cache\Cache;
 use WPStaging\Backup\Service\Archiver;
 use WPStaging\Framework\Filesystem\Filesystem;
+use WPStaging\Framework\Job\Exception\ThresholdException;
 
 class IncludeDatabaseTask extends BackupTask
 {
@@ -44,14 +45,22 @@ class IncludeDatabaseTask extends BackupTask
             return $this->generateResponse();
         }
 
-        $this->archiver->getDto()->setWrittenBytesTotal($this->stepsDto->getCurrent());
+        $archiverDto = $this->archiver->getDto();
+        $archiverDto->setWrittenBytesTotal($this->stepsDto->getCurrent());
+        $archiverDto->setFileHeaderSizeInBytes($this->jobDataDto->getCurrentWrittenFileHeaderBytes());
 
         if ($this->archiver->getDto()->getWrittenBytesTotal() !== 0) {
             $this->archiver->getDto()->setIndexPositionCreated(true);
         }
 
         try {
+            $this->archiver->setFileAppendTimeLimit($this->jobDataDto->getFileAppendTimeLimit());
             $this->archiver->appendFileToBackup($this->jobDataDto->getDatabaseFile());
+        } catch (ThresholdException $e) {
+            $this->logger->warning(sprintf(
+                'PHP time limit reached while adding database to the backup. Will try again with increasing the time limit. New time limit %s',
+                $this->jobDataDto->getFileAppendTimeLimit()
+            ));
         } catch (Exception $e) {
             $this->logger->critical(sprintf(
                 'Failed to include database in the backup: %s (%s)',
@@ -60,14 +69,19 @@ class IncludeDatabaseTask extends BackupTask
             ));
         }
 
-        $this->stepsDto->setCurrent($this->archiver->getDto()->getWrittenBytesTotal());
-
+        $archiverDto = $this->archiver->getDto();
+        $this->stepsDto->setCurrent($archiverDto->getWrittenBytesTotal());
+        $this->jobDataDto->setCurrentWrittenFileHeaderBytes(0);
         if ($this->archiver->getDto()->isFinished()) {
             clearstatcache();
             $this->jobDataDto->setDatabaseFileSize(filesize($this->jobDataDto->getDatabaseFile()));
-
+            $this->jobDataDto->setMaxDbPartIndex(1);
             $this->stepsDto->finish();
             (new Filesystem())->delete($this->jobDataDto->getDatabaseFile());
+        }
+
+        if ($archiverDto->getFileHeaderSizeInBytes() > 0) {
+            $this->jobDataDto->setCurrentWrittenFileHeaderBytes($archiverDto->getFileHeaderSizeInBytes());
         }
 
         $this->logger->info(sprintf('Included %s/%s of Database Backup.', size_format($this->stepsDto->getCurrent()), size_format($this->stepsDto->getTotal())));

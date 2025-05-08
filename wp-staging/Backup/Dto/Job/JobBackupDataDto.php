@@ -39,6 +39,9 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     /** @var array The number of files the FilesystemScanner discovered in themes,plugins,muplugins,uploads,others */
     private $discoveredFilesArray = [];
 
+    /** @var int The number of discovered files couldn't be added to backup */
+    private $invalidFiles = 0;
+
     /** @var string */
     private $databaseFile;
 
@@ -146,6 +149,15 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     /** @var bool */
     private $isContaining2GBFile = false;
 
+    /** @var bool */
+    private $isGlitchInBackup = false;
+
+    /** @var string */
+    private $glitchReason = '';
+
+    /** @var int */
+    private $fileAppendTimeLimit = 10;
+
     /**
      * @return string|null
      */
@@ -223,6 +235,31 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     public function setDiscoveredFiles($discoveredFiles)
     {
         $this->discoveredFiles = $discoveredFiles;
+    }
+
+    /**
+     * @return int
+     */
+    public function getInvalidFiles(): int
+    {
+        return $this->invalidFiles;
+    }
+
+    /**
+     * @param int $invalidFiles
+     * @return void
+     */
+    public function setInvalidFiles(int $invalidFiles)
+    {
+        $this->invalidFiles = $invalidFiles;
+    }
+
+    /**
+     * @return void
+     */
+    public function incrementInvalidFiles()
+    {
+        $this->invalidFiles++;
     }
 
     /**
@@ -600,6 +637,24 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     }
 
     /**
+     * @param string $category
+     * @param int $categoryIndex
+     * @return void
+     */
+    public function incrementFilesInPart(string $category, int $categoryIndex = 0)
+    {
+        if (!array_key_exists($category, $this->filesInParts)) {
+            $this->filesInParts[$category] = [];
+        }
+
+        if (!array_key_exists($categoryIndex, $this->filesInParts[$category])) {
+            $this->filesInParts[$category][$categoryIndex] = 0;
+        }
+
+        $this->filesInParts[$category][$categoryIndex]++;
+    }
+
+    /**
      * @return array
      */
     public function getFileBackupIndices()
@@ -834,6 +889,34 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
         $this->isContaining2GBFile = $isContaining2GBFile;
     }
 
+    public function getIsGlitchInBackup(): bool
+    {
+        return $this->isGlitchInBackup;
+    }
+
+    /**
+     * @param bool $isGlitchInBackup
+     * @return void
+     */
+    public function setIsGlitchInBackup(bool $isGlitchInBackup)
+    {
+        $this->isGlitchInBackup = $isGlitchInBackup;
+    }
+
+    public function getGlitchReason(): string
+    {
+        return $this->glitchReason;
+    }
+
+    /**
+     * @param string $glitchReason
+     * @return void
+     */
+    public function setGlitchReason(string $glitchReason)
+    {
+        $this->glitchReason = $glitchReason;
+    }
+
     /**
      * @return int
      */
@@ -849,5 +932,38 @@ class JobBackupDataDto extends JobDataDto implements RemoteUploadDtoInterface
     public function setCurrentWrittenFileHeaderBytes(int $currentWrittenFileHeaderBytes)
     {
         $this->currentWrittenFileHeaderBytes = (int)$currentWrittenFileHeaderBytes;
+    }
+
+    /**
+     * @param int $timeLimit
+     * @return void
+     */
+    public function setFileAppendTimeLimit(int $timeLimit)
+    {
+        $this->fileAppendTimeLimit = $timeLimit;
+    }
+
+    /**
+     * @return int
+     */
+    public function getFileAppendTimeLimit(): int
+    {
+        return $this->fileAppendTimeLimit;
+    }
+
+    /**
+     * @return void
+     */
+    public function incrementFileAppendTimeLimit()
+    {
+        $this->fileAppendTimeLimit += 5;
+    }
+
+    /**
+     * @return void
+     */
+    public function resetFileAppendTimeLimit()
+    {
+        $this->fileAppendTimeLimit = 10;
     }
 }

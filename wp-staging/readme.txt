@@ -8,8 +8,8 @@ License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 Tags: backup, backups, migrate, migration, wordpress backup
 Requires at least: 3.6+
-Tested up to: 6.7
-Stable tag: 4.1.2
+Tested up to: 6.8
+Stable tag: 4.1.4
 Requires PHP: 7.0
 
 Backup & Backup Restore. Migration & Staging – 1-Click Enterprise Backup Plugin, 100% Unit Tested. Keep Your Backups Safe and Secure.
@@ -286,6 +286,63 @@ That is where WP STAGING shows its strengths... Site cloning, backup, and stagin
 9. Staging demo site
 
 == Changelog ==
+
+= 4.1.4 =
+* New: Tested Backup and Staging for up to WordPress v. 6.8.1.
+* New: Add multisite support in WP Staging Backup Restore Tool. (Pro) #4171
+* New: Add an option to cancel background job using UI. #4295
+* New: Add option to view logs for running background jobs (i.e. backup creation) through the UI. #4275
+* Enh: Calculate and display the estimated size of backup component before creating a backup. #3145
+* Enh: Implement icon-based dropdown action menu with improved styling for a more polished and user-friendly interface. #4257
+* Fix: Avoid fatal error after activation of free and pro version together by checking if file exist before to require it. #4219
+* Fix: Partial table cleanup on the backup restore tool. (Pro) #4279
+* Fix: Safely clean 'wpstg_version_latest' option key from codebase #4139
+* Fix: Multiple header issue when inside database content when including large database to the backup. #4150
+* Fix: Remove trailingslash from backup file path in logs. #4232
+* Fix: Server get overloaded when uploading large backup to OneDrive. Disable QuickXorHash computing for OneDrive (Pro) #4112
+* Fix: FTP connection failure due to inconsistent array key casing during backup file retrieval. (Pro) #4211
+* Fix: Endless loop when Google Drive account has no free disk space and backup uploading to it. (Pro) #4157
+* Fix: Validate total files count and recount them during backup creation. #3982
+* Fix: Adding dedicated ID attribute to input forms and making sure ID's are W3C conform in the HTML DOM following a strict standard. #4116
+* Fix: Misleading errors in backup S3 Storage Provider. Show clear error messages. #4188
+* Fix: Add margins to the swal popup modal titles for better spacing and appearance. #4287
+* Fix: AWS s3 error "Content-MD5 OR x-amz-checksum- HTTP header is required for Put Object requests with Object Lock parameters" when object lock is enabled. (Pro) #3811
+* Fix: Set all WP Staging admin page titles more consistent. #4290
+* Fix: Incorrect uploads['baseurl'] if the upload_path is outside of absolute path. #4226
+* Fix: Normalize wp-config content and replaces linefeed with new line while creating staging site. #4265
+* Fix: Console error on staging site when site is not cloneable and closing the clone delete modal. #4276
+* Fix: Only WP Staging's plugin is active after backup restore due to object-cache (SpinupWP). #4283
+* UX: Show log entries without needing to click show logs again when displaying logs for backup background jobs. #4294
+* Dev: Prepare codebase and implement a very basic sync feature. (Pro) #2755
+* Dev: Refactor toggle directory test to playwright. #4302
+
+= 4.1.3 =
+* New: Tested for up to WordPress v. 6.8.
+* Security: Prevent authorized users from deleting admin user on the live and staging sites. (Pro) #4247
+* Performance: Disable autoload option for wpstg_staging_sites field. #4098
+* Enh: Remove the notice header from general backup notice. #4237
+* Enh: Simplify the restore tool login process. (Pro) #4117
+* Enh: Remove google libraries and create a new library for uploading backup to google drive remote storage. (Pro) #3729
+* Enh: Release the restore tool as a non-PHP file to prevent false malware detection. (Pro) #4183
+* Enh: If no primary key exists in a table, flag log entry as warning and not info. #4194
+* Enh: Improve error message for backup upload preparation failure. #4045
+* Fix: Some buttons were not translated. #4180
+* Fix: We've improved how WP Staging handles large files during backups. If a backup step takes too long, WP Staging will automatically allow extra time for it to finish. If it still can't complete successfully, the backup will safely stop instead of running forever. #4193
+* Fix: If a database collation is missing during table restore, use the `general` variant for that table restore. Also add a filter `wpstg.database.importer.replace_collation` to restore with a specific variant if the collation is missing during restore. #4199
+* Fix: No directories listed during staging process if wp-content folder is symlinked on Flywheel hosting. Enhanced symbolic link handling. #4173
+* Fix: Prevent unauthorized access to REST APIs on the staging site to avoid potential exploits during plugin updates. (Pro) #4256
+* Fix: Incorrect backup download URL when downloading backups on WP.com and Flywheel hosted sites. #4161
+* Fix: Automatically disable DEBUG constants on staging sites to prevent unwanted debug warnings. #4175
+* Fix: Add an alternative way to copy files during cloning and push when php native `copy` method fails on some system. #4144
+* Fix: Some older compressed backups couldn’t be restored due to a file header error. This update fixes the issue so those backups can now be restored properly. #4241
+* Fix: Backup older than version Pro 5.0.4 or Free 3.0.4 is considered v2 backup, thus can not be restored. #4243
+* Fix: Enhance error handling and response messaging for failed license activation attempts. #3954
+* UX: Fix the dark mode issue on the `Restore Tool` page. #4215
+* UX: Visual improvement of the restore script download page. #4218
+* Dev: Increase github actions 'timeout-minutes' for playwright tests. #4222
+* Dev: Skip staging site tests on playwright for WordPress.com like environment. Also skip email related tests on Windows as email catcher is not yet implemented on Windows. #4220
+* Dev: Improve v2 backup specification docs. #4245
+* Dev: Playwright pro test are failing because of MS oneDrive. (Pro) #4163
 
 = 4.1.2 =
 * New: Add support for multipart emails (HTML and plain text) in email notifications. #3856
@@ -1027,4 +1084,5 @@ WP STAGING Backup & Cloning | Full changelog:
 [https://wp-staging.com/wp-staging-changelog](https://wp-staging.com/wp-staging-changelog)
 
 == Upgrade Notice ==
+Compatible up to WordPress 6.8.1.
 Many improvements for reliability and bug fixes. Please update to the latest version!
