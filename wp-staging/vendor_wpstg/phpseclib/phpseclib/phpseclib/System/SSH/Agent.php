@@ -32,6 +32,7 @@
 namespace WPStaging\Vendor\phpseclib3\System\SSH;
 
 use WPStaging\Vendor\phpseclib3\Common\Functions\Strings;
+use WPStaging\Vendor\phpseclib3\Crypt\Common\PublicKey;
 use WPStaging\Vendor\phpseclib3\Crypt\PublicKeyLoader;
 use WPStaging\Vendor\phpseclib3\Crypt\RSA;
 use WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException;
@@ -98,8 +99,8 @@ class Agent
     /**
      * Default Constructor
      *
-     * @return \phpseclib3\System\SSH\Agent
-     * @throws \phpseclib3\Exception\BadConfigurationException if SSH_AUTH_SOCK cannot be found
+     * @return Agent
+     * @throws BadConfigurationException if SSH_AUTH_SOCK cannot be found
      * @throws \RuntimeException on connection errors
      */
     public function __construct($address = null)
@@ -113,7 +114,7 @@ class Agent
                     $address = $_ENV['SSH_AUTH_SOCK'];
                     break;
                 default:
-                    throw new \WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException('SSH_AUTH_SOCK not found');
+                    throw new BadConfigurationException('SSH_AUTH_SOCK not found');
             }
         }
         if (\in_array('unix', \stream_get_transports())) {
@@ -151,15 +152,15 @@ class Agent
         }
         $length = \current(\unpack('N', $this->readBytes(4)));
         $packet = $this->readBytes($length);
-        list($type, $keyCount) = \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::unpackSSH2('CN', $packet);
+        list($type, $keyCount) = Strings::unpackSSH2('CN', $packet);
         if ($type != self::SSH_AGENT_IDENTITIES_ANSWER) {
             throw new \RuntimeException('Unable to request identities');
         }
         $identities = [];
         for ($i = 0; $i < $keyCount; $i++) {
-            list($key_blob, $comment) = \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::unpackSSH2('ss', $packet);
+            list($key_blob, $comment) = Strings::unpackSSH2('ss', $packet);
             $temp = $key_blob;
-            list($key_type) = \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::unpackSSH2('s', $temp);
+            list($key_type) = Strings::unpackSSH2('s', $temp);
             switch ($key_type) {
                 case 'ssh-rsa':
                 case 'ssh-dss':
@@ -167,16 +168,32 @@ class Agent
                 case 'ecdsa-sha2-nistp256':
                 case 'ecdsa-sha2-nistp384':
                 case 'ecdsa-sha2-nistp521':
-                    $key = \WPStaging\Vendor\phpseclib3\Crypt\PublicKeyLoader::load($key_type . ' ' . \base64_encode($key_blob));
+                    $key = PublicKeyLoader::load($key_type . ' ' . \base64_encode($key_blob));
             }
             // resources are passed by reference by default
             if (isset($key)) {
-                $identity = (new \WPStaging\Vendor\phpseclib3\System\SSH\Agent\Identity($this->fsock))->withPublicKey($key)->withPublicKeyBlob($key_blob);
+                $identity = (new Identity($this->fsock))->withPublicKey($key)->withPublicKeyBlob($key_blob)->withComment($comment);
                 $identities[] = $identity;
                 unset($key);
             }
         }
         return $identities;
+    }
+    /**
+     * Returns the SSH Agent identity matching a given public key or null if no identity is found
+     *
+     * @return ?Identity
+     */
+    public function findIdentityByPublicKey(PublicKey $key)
+    {
+        $identities = $this->requestIdentities();
+        $key = (string) $key;
+        foreach ($identities as $identity) {
+            if ((string) $identity->getPublicKey() == $key) {
+                return $identity;
+            }
+        }
+        return null;
     }
     /**
      * Signal that agent forwarding should
@@ -193,10 +210,10 @@ class Agent
     /**
      * Request agent forwarding of remote server
      *
-     * @param \phpseclib3\Net\SSH2 $ssh
+     * @param SSH2 $ssh
      * @return bool
      */
-    private function request_forwarding(\WPStaging\Vendor\phpseclib3\Net\SSH2 $ssh)
+    private function request_forwarding(SSH2 $ssh)
     {
         if (!$ssh->requestAgentForwarding()) {
             return \false;
@@ -211,9 +228,9 @@ class Agent
      * open to give the SSH Agent an opportunity
      * to take further action. i.e. request agent forwarding
      *
-     * @param \phpseclib3\Net\SSH2 $ssh
+     * @param SSH2 $ssh
      */
-    public function registerChannelOpen(\WPStaging\Vendor\phpseclib3\Net\SSH2 $ssh)
+    public function registerChannelOpen(SSH2 $ssh)
     {
         if ($this->forward_status == self::FORWARD_REQUEST) {
             $this->request_forwarding($ssh);

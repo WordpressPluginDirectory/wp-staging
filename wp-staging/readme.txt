@@ -9,7 +9,7 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 Tags: backup, backups, migrate, migration, wordpress backup
 Requires at least: 3.6+
 Tested up to: 6.8
-Stable tag: 4.1.4
+Stable tag: 4.3.1
 Requires PHP: 7.0
 
 Backup & Backup Restore. Migration & Staging – 1-Click Enterprise Backup Plugin, 100% Unit Tested. Keep Your Backups Safe and Secure.
@@ -286,6 +286,114 @@ That is where WP STAGING shows its strengths... Site cloning, backup, and stagin
 9. Staging demo site
 
 == Changelog ==
+
+= 4.3.1 =
+* Enh: Add filter `wpstg.backup.restore.exclude.tables` to support excluding of specific tables during the backup restore process. #4430
+* Enh: Add custom region field for Wasabi S3 backup storage settings to support additional regions not listed in predefined options. (Pro) #4470
+* Enh: Improve upgrade notification. #4529
+* Enh: Add cancel option for refactored staging site creation. Make UI options work in the refactored staging site logic. #4464
+* Fix: Misleading warning message displayed when symlinking files on staging site. #4555
+* Fix: Optimize and improve loading placeholder performance and smoothness to eliminate UI flakiness. #4526
+* Fix: Magic login links to staging site not always work. Refactor auto-login code for re-usability and ensure auto login metadata is cleared after authentication. (Pro) #4424
+* Fix: Resolved false positive database permission warnings and empty table lists when deleting staging sites with external databases and custom table prefixes. (Pro) #4576
+* Fix: Fatal error for `invalid job type` when uploading local backup to cloud. (Pro) #4518
+* Fix: Memory exhaust error on backup restore when using the restore tool. Fix class not found in the restore tool and remove unused constants. (Pro) #4552
+* Fix: Temporarily disable the modal "Nothing to worry but there is a glitch…". #4516
+* Dev: Improve speed of playwright background test and add AI agent documentation #4565
+* Dev: Exclude CLAUDE.md from dist packages. #4534
+* Dev: Bring back `WP Staging Restorer` build script. #4570
+* Dev: Extend the remote backup downloader so it can be used for remote sync feature. Also use only login related cookies when running background queue jobs. #4393
+* Dev: Remove php cli github action workflow. #4536
+* Dev: Move backup storage providers one folder up and remove folder storages. #4484
+* Dev: Optimize github actions by removing PHP CLI setup action and using Docker containers for all PHP commands, saving ~32 seconds per workflow run #4532
+
+= 4.3.0 =
+* New: Opening a staging site using `Action` dropdown > `Open`, now automatically login to staging site using one time login token. Existing (old) staging sites must be updated to use this feature. (Pro) #3636
+* New: Implement new log level "Notice" and improve log filtering with multi-select checkboxes. Users can now see important notices that are not warnings or errors, and filter multiple log types simultaneously instead of being limited to single-type filtering. #4506
+* New: Add new `Personal License` plan. (Pro) #4420
+* Enh: Add backup cancel button for server side events (SSE) based realtime background logger for backup foreground jobs as well. #4472
+* Enh: Remove Amazon SDK and create a new custom S3 Implementation that is faster and smaller than the official Amazon SDK. (Pro) #4468
+* Fix: Unable to create compressed large backup. Extraction and validation of large database fails if it couldn't be completed in a single request. #4466
+* Fix: Cleanup staging site cache file on cancel. Fix browser console errors on staging site cancel. #4456
+* Fix: Backup cancel process doesn't cleanup temp files extracted during backup restore. #4512
+* Fix: Prevent fatal TypeError crashes during backup operations when null values are encountered in file metadata. #4330
+* Fix: Delete rest url transient after staging site creation to make background logger work on staging sites. #4473
+* Fix: Invalid ID in HTML of listed remote backup elements. #4490
+* Fix: Background logger keeps on running after deleting a large staging site. #4411
+* Fix: Escape invalid HTML entities to prevent `DOMDocument` parse errors during news feed validation. #4475
+* Fix: Refresh `Last Saved` date after saving storage settings. (Pro) #4486
+* Fix: Exclude `wp-content/wp-staging` folder by default while performing staging push. (Pro) #4477
+* Fix: Typo in backup and restore task – "Tmp" should be "Temp". #4408
+* Fix: Cleanup temporary validation files after backup creation and add a routine to clean the temporary validation directory. #4407
+* Fix: Prevent staging site creation from hanging when theme folder has no access permissions. #4451
+* Fix: Change "Twitter" to "X" in notification messages and social links. #4436
+* UX: Remove admin message "diagnostic information". #4505
+* UX: Use alert SVG icon for rendering alert messages. #4402
+* UX: Make sure listed local backup and remote backup containers have the same height. #4487
+* UX: Improve multi-part backup download modal for better usability and clarity. #4410
+* Dev: Optimize and fix LLM instructions and setup steps for faster build process. #4496
+
+= 4.2.1 =
+* New: Compatible up to WordPress 6.8.2.
+* Enh: Reduce the disk space requirement for backups during creation and improve the speed of backup creation when compression is enabled. #4342
+* Enh: Show Bytes in more human friendly megabytes format in Log Window. #4385
+* Enh: Improve update message text for staged rollouts. #4394
+* Enh: Disable click option of Add Exclusion checkbox in Create Backup modal for free version. #4396
+* Enh: Use constant for non-test action hooks in whole code base. #4354
+* Fix: Misleading menu name for copying backup URL. #4397
+* Fix: Incorrect HTML encoding in log output. #4388
+* Fix: UX, missing margin in free version for pro feature demonstration text. #4389
+* Fix: Improve log wording of backup processing. Wrong usage of plural and singular. #4373
+* Fix: Modal "Another backup is running" looks broken and has sprintf error. #4384
+* Fix: Prevent possible rare race condition when purging the cache. #4392
+* Fix: Keep Advanced Options collapsed on Create Backup popup. #4449
+* Fix: Removing translations from brand names and general global known terms. #4395
+* Fix: Avoid scanner issues in the backup restore standalone tool. #4361
+* Fix: Prevent error in email masking for short usernames that have only two characters. #4382
+* Fix: Opening Settings -> Temporary Logins is slow in free version and takes seconds to load. #4387
+* UX: Add space character in Action menu items between menu text and (Unregistered) #4441
+* UX: Margin right issue on main html container on mobile devices. #4426
+* Dev: Move Remote Sync feature towards final steps. #4318
+* Dev: Prepare file copying logic to use backup logic for staging site feature refactor. #4224
+* Dev: Prepare data login to use backup logic for staging site feature refactor. #4239
+* Dev: Fix e2e tests failing because of outdated db version in database snapshot used for resetting database between tests. #4427
+
+= 4.2.0 =
+* New: Add pCloud backup storage cloud provider. (Pro) #2876
+* New: Add filter `wpstg.cloning.preserve_upload_path` to preserve the upload_path option during staging site creation. #3751
+* Enh: Exclude ".gz" and ".tmp" from the backup process by default #1500
+* Enh: Improve logs while compressing file in backups. #3432
+* Enh: Label backup as "Compressed" when it is a compressed backup. #4324
+* Enh: Change EDD license endpoint to a custom endpoint with fallback to legacy endpoint for improved reliability and performance. (Pro) #4336
+* Enh: Improve the error message when the database table can't be repaired during backup and if it is required. #4355
+* Fix: Sanitize sftp options value to fix Uncaught TypeError #4209
+* Fix: S3 backup (remote storages) authentication process is failing. (Pro) #4299
+* Fix: Don't copy backup schedules and temporary logins while creating a new staging site. Beautify clone edit modal tooltip text. #4285
+* Fix: Unable to detect job type during WP Staging `status` ajax request. #4337
+* Fix: Missing pro features for the `Developer Plan – 30 Active Sites` plan. (Pro) #4331
+* Fix: Handle exclusion rules `Other WP Root Folders` backup to prevent the inclusion of unintended files/folders. (Pro) #4348
+* Fix: Empty dirs are not copied during clone, update and push which create issues with third party plugins. #3329
+* Fix: Improve error message when restore couldn't be possible using free version because server changed. #4334
+* Fix: Ensure pro features remain accessible even if the license is expired. (Pro) #4176
+* Fix: On Multisite, Restore fails during database rename task when restoring full network backup if WP Staging plugin(s) are network active. (Pro) #4272
+* Fix: The restore tool slows to load 'View backup' screen for large backup files. (Pro) #4292
+* Fix: Remove wp-login.php from staging site login links incl. Temporary Login links to prevent cloudflare restrictions. #4192
+* Fix: Backup upload failing for Dropbox backup remote storage. (Pro) #4375
+* UX: Enhance the visual appearance of the backup storage icons. #4367
+* UX: Missing space in Show Logs link. #4366
+* UX: Adjust backup background logger design so that it takes less height on the screen. #4317
+* UX: Remove duplicate buttons from tables selection while doing staging process. #4304
+* UX: Enhance the activation process for backup cloud storage providers. (Pro) #4190
+* UX: Beautify loading placeholder. #4322
+* UX: Improve FTP backup storage UX #4234
+* UX: Increase line-height of delete backup confirmation modal to make it more appealing. #4313
+* Dev: Replace yarn with pnpm for building assets. Update php and js dependencies. #4352
+* Dev: Improve database cloning speed for the upcoming staging site refactor. #4258
+* Dev: Fix failing e2e tests. #4370
+* Dev: Refactor hardcoded `wpstg_queue` string with constant. #2946
+* Dev: Add an Github Action to create dist package against current state of the plugin, so they can be downloaded and installed. #4350
+* Dev: Fix e2e failing on github for PCloud tests. #4363
+* Dev: Fork lucatume/DI52 dependency to support PHP 7.0 and remove warnings in PHP 8.4. #4359
 
 = 4.1.4 =
 * New: Tested Backup and Staging for up to WordPress v. 6.8.1.

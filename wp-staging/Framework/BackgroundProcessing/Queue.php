@@ -54,6 +54,11 @@ class Queue
     const STATUS_CANCELED   = 'canceled';
 
     /**
+     * @var string
+     */
+    const QUEUE_TABLE_NAME = 'wpstg_queue';
+
+    /**
      * Option name where we store queue table version
      * @var string
      * @deprecated use QUEUE_TABLE_STRUCTURE_VERSION_KEY instead
@@ -89,7 +94,9 @@ class Queue
     /**
      * The current table state, or `null` if the current table state has never been
      * assessed before.
-     *
+     * TABLE_NOT_EXIST = -1;
+     * TABLE_EXISTS    = 0;
+     * TABLE_CREATED   = 1;
      * @var string|null|int
      */
     private $tableState;
@@ -357,7 +364,7 @@ class Queue
     {
         global $wpdb;
 
-        return $wpdb->prefix . 'wpstg_queue';
+        return $wpdb->prefix . self::QUEUE_TABLE_NAME;
     }
 
     /**
@@ -992,8 +999,9 @@ class Queue
         $jobIdsInterval = $this->escapeInterval($jobIds);
         $now            = current_time('mysql');
         $cancelQuery    = "UPDATE {$tableName} 
-            SET status='{$newStatus}', claimed_at=NULL, updated_at='{$now}'
-            WHERE jobId in ({$jobIdsInterval})";
+            SET status='{$newStatus}', updated_at='{$now}'
+            WHERE jobId in ({$jobIdsInterval})
+            AND status NOT IN ('" . self::STATUS_COMPLETED . "', '" . self::STATUS_CANCELED . "', '" . self::STATUS_FAILED . "')";
         $cancelResult = $this->database->query($cancelQuery);
 
         if ($cancelResult === false) {

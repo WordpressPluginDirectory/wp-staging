@@ -4,6 +4,7 @@ namespace WPStaging\Staging\Tasks\StagingSiteCreate;
 
 use RuntimeException;
 use WPStaging\Backend\Modules\SystemInfo;
+use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Adapter\Database;
 use WPStaging\Framework\Adapter\Directory;
 use WPStaging\Framework\Analytics\Actions\AnalyticsStagingCreate;
@@ -14,6 +15,8 @@ use WPStaging\Framework\Utils\Cache\Cache;
 use WPStaging\Framework\Job\Dto\StepsDto;
 use WPStaging\Framework\Job\Exception\DiskNotWritableException;
 use WPStaging\Staging\Dto\Job\StagingSiteCreateDataDto;
+use WPStaging\Staging\Dto\StagingSiteDto;
+use WPStaging\Staging\Sites;
 use WPStaging\Staging\Tasks\StagingTask;
 use WPStaging\Vendor\Psr\Log\LoggerInterface;
 
@@ -40,6 +43,9 @@ class CreateRequirementsCheckTask extends StagingTask
     /** @var StagingSiteCreateDataDto $jobDataDto */
     protected $jobDataDto;
 
+    /** @var Sites */
+    protected $sites;
+
     public function __construct(
         Directory $directory,
         Database $database,
@@ -50,7 +56,8 @@ class CreateRequirementsCheckTask extends StagingTask
         SeekableQueueInterface $taskQueue,
         DiskWriteCheck $diskWriteCheck,
         AnalyticsStagingCreate $analyticsStagingCreate,
-        SystemInfo $systemInfo
+        SystemInfo $systemInfo,
+        Sites $sites
     ) {
         parent::__construct($logger, $cache, $stepsDto, $taskQueue);
         $this->directory              = $directory;
@@ -59,6 +66,7 @@ class CreateRequirementsCheckTask extends StagingTask
         $this->analyticsStagingCreate = $analyticsStagingCreate;
         $this->systemInfo             = $systemInfo;
         $this->database               = $database;
+        $this->sites                  = $sites;
     }
 
     public static function getTaskName()
@@ -81,6 +89,7 @@ class CreateRequirementsCheckTask extends StagingTask
             $this->logger->info('#################### Start Staging Site Create Job ####################');
             $this->logger->writeLogHeader();
             $this->logger->writeInstalledPluginsAndThemes();
+            $this->writeStagingSettingsLogs();
             $this->cannotCreateStagingSiteOnMultisite();
             $this->cannotCreateIfCantWriteToDisk();
             $this->cannotCreateStagingDirectory();
@@ -94,9 +103,20 @@ class CreateRequirementsCheckTask extends StagingTask
             return $this->generateResponse(false);
         }
 
+        $this->saveStagingSite();
         $this->logger->info('Staging Site creation requirements passed...');
 
         return $this->generateResponse();
+    }
+
+    /**
+     * @return void
+     */
+    protected function saveStagingSite()
+    {
+        $stagingSites = $this->sites->tryGettingStagingSites();
+        $stagingSites[$this->jobDataDto->getCloneId()] = $this->jobDataDto->getStagingSite()->toArray();
+        $this->sites->updateStagingSites($stagingSites);
     }
 
     protected function cannotCreateStagingSiteOnMultisite()
@@ -137,8 +157,7 @@ class CreateRequirementsCheckTask extends StagingTask
 
     protected function cannotCreateIfUsingExternalDatabase()
     {
-        $isUsingExternalDatabase = false;
-        if ($isUsingExternalDatabase) {
+        if ($this->jobDataDto->getIsExternalDatabase()) {
             throw new RuntimeException(esc_html__('Staging site creation with external database is not supported in the basic version.', 'wp-staging'));
         }
     }
@@ -149,5 +168,16 @@ class CreateRequirementsCheckTask extends StagingTask
         if ($isSamePrefix) {
             throw new RuntimeException(esc_html__('Staging site prefix is same as production site prefix. Use different prefix for staging site.', 'wp-staging'));
         }
+    }
+
+    protected function writeStagingSettingsLogs()
+    {
+        $this->logger->info('Staging Settings:');
+        $this->logger->info('Staging Site Path: ' . $this->jobDataDto->getStagingSitePath());
+        $this->logger->info('Staging Site URL: ' . $this->jobDataDto->getStagingSiteUrl());
+        $this->logger->info('Database Prefix: ' . $this->jobDataDto->getDatabasePrefix());
+        $this->logger->info('Clone ID: ' . $this->jobDataDto->getCloneId());
+        $this->logger->info('Clone Name: ' . $this->jobDataDto->getName());
+        $this->logger->info('Is External Database: ' . ($this->jobDataDto->getIsExternalDatabase() ? 'Yes' : 'No'));
     }
 }

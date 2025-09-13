@@ -175,7 +175,7 @@ abstract class ASN1
      */
     public static function decodeBER($encoded)
     {
-        if ($encoded instanceof \WPStaging\Vendor\phpseclib3\File\ASN1\Element) {
+        if ($encoded instanceof Element) {
             $encoded = $encoded->element;
         }
         self::$encoded = $encoded;
@@ -248,8 +248,7 @@ abstract class ASN1
             // tags of indefinte length don't really have a header length; this length includes the tag
             $current += ['headerlength' => $length + 2];
             $start += $length;
-            \extract(\unpack('Nlength', \substr(\str_pad($temp, 4, \chr(0), \STR_PAD_LEFT), -4)));
-            /** @var integer $length */
+            $length = \unpack('Nlength', \substr(\str_pad($temp, 4, \chr(0), \STR_PAD_LEFT), -4))['length'];
         } else {
             $current += ['headerlength' => 2];
         }
@@ -285,7 +284,7 @@ abstract class ASN1
                     }
                     $length = $temp['length'];
                     // end-of-content octets - see paragraph 8.1.5
-                    if (\substr($content, $content_pos + $length, 2) == "\0\0") {
+                    if (\substr($content, $content_pos + $length, 2) == "\x00\x00") {
                         $length += 2;
                         $start += $length;
                         $newcontent[] = $temp;
@@ -322,7 +321,7 @@ abstract class ASN1
                 if ($constructed) {
                     return \false;
                 }
-                $current['content'] = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(\substr($content, $content_pos), -256);
+                $current['content'] = new BigInteger(\substr($content, $content_pos), -256);
                 break;
             case self::TYPE_REAL:
                 // not currently supported
@@ -360,7 +359,7 @@ abstract class ASN1
                 } else {
                     $current['content'] = '';
                     $length = 0;
-                    while (\substr($content, $content_pos, 2) != "\0\0") {
+                    while (\substr($content, $content_pos, 2) != "\x00\x00") {
                         $temp = self::decode_ber($content, $length + $start, $content_pos);
                         if ($temp === \false) {
                             return \false;
@@ -373,7 +372,7 @@ abstract class ASN1
                         $current['content'] .= $temp['content'];
                         $length += $temp['length'];
                     }
-                    if (\substr($content, $content_pos, 2) == "\0\0") {
+                    if (\substr($content, $content_pos, 2) == "\x00\x00") {
                         $length += 2;
                         // +2 for the EOC
                     }
@@ -396,7 +395,7 @@ abstract class ASN1
                 while ($content_pos < $content_len) {
                     // if indefinite length construction was used and we have an end-of-content string next
                     // see paragraphs 8.1.1.3, 8.1.3.2, 8.1.3.6, 8.1.5, and (for an example) 8.6.4.2
-                    if (!isset($current['headerlength']) && \substr($content, $content_pos, 2) == "\0\0") {
+                    if (!isset($current['headerlength']) && \substr($content, $content_pos, 2) == "\x00\x00") {
                         $length = $offset + 2;
                         // +2 for the EOC
                         break 2;
@@ -488,7 +487,7 @@ abstract class ASN1
                 $intype = $decoded['type'];
                 // !isset(self::ANY_MAP[$intype]) produces a fatal error on PHP 5.6
                 if (isset($decoded['constant']) || !\array_key_exists($intype, self::ANY_MAP) || \ord(self::$encoded[$decoded['start']]) & 0x20) {
-                    return new \WPStaging\Vendor\phpseclib3\File\ASN1\Element(\substr(self::$encoded, $decoded['start'], $decoded['length']));
+                    return new Element(\substr(self::$encoded, $decoded['start'], $decoded['length']));
                 }
                 $inmap = self::ANY_MAP[$intype];
                 if (\is_string($inmap)) {
@@ -734,7 +733,7 @@ abstract class ASN1
             case self::TYPE_ENUMERATED:
                 $temp = $decoded['content'];
                 if (isset($mapping['implicit'])) {
-                    $temp = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($decoded['content'], -256);
+                    $temp = new BigInteger($decoded['content'], -256);
                 }
                 if (isset($mapping['mapping'])) {
                     $temp = (int) $temp->toString();
@@ -754,11 +753,11 @@ abstract class ASN1
      */
     public static function decodeLength(&$string)
     {
-        $length = \ord(\WPStaging\Vendor\phpseclib3\Common\Functions\Strings::shift($string));
+        $length = \ord(Strings::shift($string));
         if ($length & 0x80) {
             // definite length, long form
             $length &= 0x7f;
-            $temp = \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::shift($string, $length);
+            $temp = Strings::shift($string, $length);
             list(, $length) = \unpack('N', \substr(\str_pad($temp, 4, \chr(0), \STR_PAD_LEFT), -4));
         }
         return $length;
@@ -792,7 +791,7 @@ abstract class ASN1
      */
     private static function encode_der($source, array $mapping, $idx = null, array $special = [])
     {
-        if ($source instanceof \WPStaging\Vendor\phpseclib3\File\ASN1\Element) {
+        if ($source instanceof Element) {
             return $source->element;
         }
         // do not encode (implicitly optional) fields with value set to default
@@ -863,7 +862,19 @@ abstract class ASN1
                            an untagged "DummyReference" (see ITU-T Rec. X.683 | ISO/IEC 8824-4, 8.3)."
                         */
                         if (isset($child['explicit']) || $child['type'] == self::TYPE_CHOICE) {
-                            $subtag = \chr(self::CLASS_CONTEXT_SPECIFIC << 6 | 0x20 | $child['constant']);
+                            if ($child['constant'] <= 30) {
+                                $subtag = \chr(self::CLASS_CONTEXT_SPECIFIC << 6 | 0x20 | $child['constant']);
+                            } else {
+                                $constant = $child['constant'];
+                                $subtag = '';
+                                while ($constant > 0) {
+                                    $subtagvalue = $constant & 0x7f;
+                                    $subtag = \chr(0x80 | $subtagvalue) . $subtag;
+                                    $constant = $constant >> 7;
+                                }
+                                $subtag[\strlen($subtag) - 1] = $subtag[\strlen($subtag) - 1] & \chr(0x7f);
+                                $subtag = \chr(self::CLASS_CONTEXT_SPECIFIC << 6 | 0x20 | 0x1f) . $subtag;
+                            }
                             $temp = $subtag . self::encodeLength(\strlen($temp)) . $temp;
                         } else {
                             $subtag = \chr(self::CLASS_CONTEXT_SPECIFIC << 6 | \ord($temp[0]) & 0x20 | $child['constant']);
@@ -911,7 +922,7 @@ abstract class ASN1
             case self::TYPE_ENUMERATED:
                 if (!isset($mapping['mapping'])) {
                     if (\is_numeric($source)) {
-                        $source = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($source);
+                        $source = new BigInteger($source);
                     }
                     $value = $source->toBytes(\true);
                 } else {
@@ -919,7 +930,7 @@ abstract class ASN1
                     if ($value === \false) {
                         return \false;
                     }
-                    $value = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($value);
+                    $value = new BigInteger($value);
                     $value = $value->toBytes(\true);
                 }
                 if (!\strlen($value)) {
@@ -982,7 +993,7 @@ abstract class ASN1
                     case !isset($source):
                         return self::encode_der(null, ['type' => self::TYPE_NULL] + $mapping, null, $special);
                     case \is_int($source):
-                    case $source instanceof \WPStaging\Vendor\phpseclib3\Math\BigInteger:
+                    case $source instanceof BigInteger:
                         return self::encode_der($source, ['type' => self::TYPE_INTEGER] + $mapping, null, $special);
                     case \is_float($source):
                         return self::encode_der($source, ['type' => self::TYPE_REAL] + $mapping, null, $special);
@@ -1024,7 +1035,7 @@ abstract class ASN1
                 $value = $source;
                 break;
             case self::TYPE_BOOLEAN:
-                $value = $source ? "ÿ" : "\0";
+                $value = $source ? "\xff" : "\x00";
                 break;
             default:
                 throw new \RuntimeException('Mapping provides no type definition for ' . \implode('/', self::$location));
@@ -1052,24 +1063,31 @@ abstract class ASN1
      */
     public static function decodeOID($content)
     {
+        // BigInteger's are used because of OIDs like 2.25.329800735698586629295641978511506172918
+        // https://healthcaresecprivacy.blogspot.com/2011/02/creating-and-using-unique-id-uuid-oid.html elaborates.
         static $eighty;
         if (!$eighty) {
-            $eighty = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(80);
+            $eighty = new BigInteger(80);
         }
         $oid = [];
         $pos = 0;
         $len = \strlen($content);
+        // see https://github.com/openjdk/jdk/blob/2deb318c9f047ec5a4b160d66a4b52f93688ec42/src/java.base/share/classes/sun/security/util/ObjectIdentifier.java#L55
+        if ($len > 4096) {
+            //throw new \RuntimeException("Object identifier size is limited to 4096 bytes ($len bytes present)");
+            return \false;
+        }
         if (\ord($content[$len - 1]) & 0x80) {
             return \false;
         }
-        $n = new \WPStaging\Vendor\phpseclib3\Math\BigInteger();
+        $n = new BigInteger();
         while ($pos < $len) {
             $temp = \ord($content[$pos++]);
             $n = $n->bitwise_leftShift(7);
-            $n = $n->bitwise_or(new \WPStaging\Vendor\phpseclib3\Math\BigInteger($temp & 0x7f));
+            $n = $n->bitwise_or(new BigInteger($temp & 0x7f));
             if (~$temp & 0x80) {
                 $oid[] = $n;
-                $n = new \WPStaging\Vendor\phpseclib3\Math\BigInteger();
+                $n = new BigInteger();
             }
         }
         $part1 = \array_shift($oid);
@@ -1102,9 +1120,9 @@ abstract class ASN1
     {
         static $mask, $zero, $forty;
         if (!$mask) {
-            $mask = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(0x7f);
-            $zero = new \WPStaging\Vendor\phpseclib3\Math\BigInteger();
-            $forty = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(40);
+            $mask = new BigInteger(0x7f);
+            $zero = new BigInteger();
+            $forty = new BigInteger(40);
         }
         if (!\preg_match('#(?:\\d+\\.)+#', $source)) {
             $oid = isset(self::$reverseOIDs[$source]) ? self::$reverseOIDs[$source] : \false;
@@ -1117,17 +1135,17 @@ abstract class ASN1
         $parts = \explode('.', $oid);
         $part1 = \array_shift($parts);
         $part2 = \array_shift($parts);
-        $first = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($part1);
+        $first = new BigInteger($part1);
         $first = $first->multiply($forty);
-        $first = $first->add(new \WPStaging\Vendor\phpseclib3\Math\BigInteger($part2));
+        $first = $first->add(new BigInteger($part2));
         \array_unshift($parts, $first->toString());
         $value = '';
         foreach ($parts as $part) {
             if (!$part) {
-                $temp = "\0";
+                $temp = "\x00";
             } else {
                 $temp = '';
-                $part = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($part);
+                $part = new BigInteger($part);
                 while (!$part->equals($zero)) {
                     $submask = $part->bitwise_and($mask);
                     $submask->setPrecision(8);
@@ -1291,7 +1309,7 @@ abstract class ASN1
                         return \false;
                     }
                     break;
-                case ($c & 0x80000000) != 0:
+                case ($c & (\PHP_INT_SIZE == 8 ? 0x80000000 : 1 << 31)) != 0:
                     return \false;
                 case $c >= 0x4000000:
                     $v .= \chr(0x80 | $c & 0x3f);
@@ -1348,7 +1366,7 @@ abstract class ASN1
         $temp = \str_replace(["\r", "\n", ' '], '', $temp);
         // remove the -----BEGIN CERTIFICATE----- and -----END CERTIFICATE----- stuff
         $temp = \preg_replace('#^-+[^-]+-+|-+[^-]+-+$#', '', $temp);
-        $temp = \preg_match('#^[a-zA-Z\\d/+]*={0,2}$#', $temp) ? \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::base64_decode($temp) : \false;
+        $temp = \preg_match('#^[a-zA-Z\\d/+]*={0,2}$#', $temp) ? Strings::base64_decode($temp) : \false;
         return $temp != \false ? $temp : $str;
     }
     /**

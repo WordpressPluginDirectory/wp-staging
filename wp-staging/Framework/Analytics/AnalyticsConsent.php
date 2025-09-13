@@ -92,6 +92,7 @@ class AnalyticsConsent
         check_ajax_referer('wpstg_consent_nonce', 'wpstgConsentNonce');
 
         if ($_GET['wpstgConsent'] == 'later') {
+            update_option(self::OPTION_NAME_ANALYTICS_MODAL_DISMISSED, '1', false);
             update_option(self::OPTION_NAME_ANALYTICS_REMIND_ME, strtotime('+7 days'), false);
 
             return;
@@ -104,7 +105,7 @@ class AnalyticsConsent
             update_option(self::OPTION_NAME_ANALYTICS_HAS_CONSENT, '0', false);
             delete_option(self::OPTION_NAME_ANALYTICS_REMIND_ME);
 
-            add_action('wpstg.admin_notices', [$this, 'showNoticeConsentRefused']);
+            add_action(Notices::ACTION_ADMIN_NOTICES, [$this, 'showNoticeConsentRefused']);
 
             return;
         }

@@ -106,6 +106,15 @@ class Escape
                 'y2'     => [],
                 'fill'   => [],
                 'stroke' => [],
+            ],
+            'defs' => [
+                'clipPath' => []
+            ],
+            'ellipse' => [
+                'cx'     => [],
+                'cy'     => [],
+                'rx'     => [],
+                'ry'     => [],
             ]
         ];
     }

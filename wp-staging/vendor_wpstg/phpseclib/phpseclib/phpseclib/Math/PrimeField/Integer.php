@@ -19,7 +19,7 @@ use WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integer as Base;
  *
  * @author  Jim Wigginton <terrafrost@php.net>
  */
-class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integer
+class Integer extends Base
 {
     /**
      * Holds the PrimeField's value
@@ -48,19 +48,32 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
     /**
      * Zero
      *
-     * @var BigInteger
+     * @var BigInteger[]
      */
     protected static $zero;
+    /**
+     * One
+     *
+     * @var BigInteger[]
+     */
+    protected static $one;
+    /**
+     * Two
+     *
+     * @var BigInteger[]
+     */
+    protected static $two;
     /**
      * Default constructor
      *
      * @param int $instanceID
+     * @param BigInteger $num
      */
-    public function __construct($instanceID, \WPStaging\Vendor\phpseclib3\Math\BigInteger $num = null)
+    public function __construct($instanceID, $num = null)
     {
         $this->instanceID = $instanceID;
         if (!isset($num)) {
-            $this->value = clone static::$zero[static::class];
+            $this->value = clone static::$zero[$instanceID];
         } else {
             $reduce = static::$reduce[$instanceID];
             $this->value = $reduce($num);
@@ -72,7 +85,7 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
      * @param int $instanceID
      * @return void
      */
-    public static function setModulo($instanceID, \WPStaging\Vendor\phpseclib3\Math\BigInteger $modulo)
+    public static function setModulo($instanceID, BigInteger $modulo)
     {
         static::$modulo[$instanceID] = $modulo;
     }
@@ -85,8 +98,8 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
     public static function setRecurringModuloFunction($instanceID, callable $function)
     {
         static::$reduce[$instanceID] = $function;
-        if (!isset(static::$zero[static::class])) {
-            static::$zero[static::class] = new \WPStaging\Vendor\phpseclib3\Math\BigInteger();
+        if (!isset(static::$zero[$instanceID])) {
+            static::$zero[$instanceID] = new BigInteger();
         }
     }
     /**
@@ -96,6 +109,9 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
     {
         unset(static::$modulo[$instanceID]);
         unset(static::$reduce[$instanceID]);
+        unset(static::$zero[$instanceID]);
+        unset(static::$one[$instanceID]);
+        unset(static::$two[$instanceID]);
     }
     /**
      * Returns the modulo
@@ -196,7 +212,7 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
      *
      * @return static
      */
-    public function pow(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function pow(BigInteger $x)
     {
         $temp = new static($this->instanceID);
         $temp->value = $this->value->powMod($x, static::$modulo[$this->instanceID]);
@@ -210,37 +226,39 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
      */
     public function squareRoot()
     {
-        static $one, $two;
-        if (!isset($one)) {
-            $one = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(1);
-            $two = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(2);
+        if (!isset(static::$one[$this->instanceID])) {
+            static::$one[$this->instanceID] = new BigInteger(1);
+            static::$two[$this->instanceID] = new BigInteger(2);
         }
-        $reduce = static::$reduce[$this->instanceID];
-        $p_1 = static::$modulo[$this->instanceID]->subtract($one);
+        $one =& static::$one[$this->instanceID];
+        $two =& static::$two[$this->instanceID];
+        $modulo =& static::$modulo[$this->instanceID];
+        $reduce =& static::$reduce[$this->instanceID];
+        $p_1 = $modulo->subtract($one);
         $q = clone $p_1;
-        $s = \WPStaging\Vendor\phpseclib3\Math\BigInteger::scan1divide($q);
+        $s = BigInteger::scan1divide($q);
         list($pow) = $p_1->divide($two);
-        for ($z = $one; !$z->equals(static::$modulo[$this->instanceID]); $z = $z->add($one)) {
-            $temp = $z->powMod($pow, static::$modulo[$this->instanceID]);
+        for ($z = $one; !$z->equals($modulo); $z = $z->add($one)) {
+            $temp = $z->powMod($pow, $modulo);
             if ($temp->equals($p_1)) {
                 break;
             }
         }
-        $m = new \WPStaging\Vendor\phpseclib3\Math\BigInteger($s);
-        $c = $z->powMod($q, static::$modulo[$this->instanceID]);
-        $t = $this->value->powMod($q, static::$modulo[$this->instanceID]);
+        $m = new BigInteger($s);
+        $c = $z->powMod($q, $modulo);
+        $t = $this->value->powMod($q, $modulo);
         list($temp) = $q->add($one)->divide($two);
-        $r = $this->value->powMod($temp, static::$modulo[$this->instanceID]);
+        $r = $this->value->powMod($temp, $modulo);
         while (!$t->equals($one)) {
-            for ($i == clone $one; $i->compare($m) < 0; $i = $i->add($one)) {
-                if ($t->powMod($two->pow($i), static::$modulo[$this->instanceID])->equals($one)) {
+            for ($i = clone $one; $i->compare($m) < 0; $i = $i->add($one)) {
+                if ($t->powMod($two->pow($i), $modulo)->equals($one)) {
                     break;
                 }
             }
             if ($i->compare($m) == 0) {
                 return \false;
             }
-            $b = $c->powMod($two->pow($m->subtract($i)->subtract($one)), static::$modulo[$this->instanceID]);
+            $b = $c->powMod($two->pow($m->subtract($i)->subtract($one)), $modulo);
             $m = $i;
             $c = $reduce($b->multiply($b));
             $t = $reduce($t->multiply($c));
@@ -276,8 +294,11 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
      */
     public function toBytes()
     {
-        $length = static::$modulo[$this->instanceID]->getLengthInBytes();
-        return \str_pad($this->value->toBytes(), $length, "\0", \STR_PAD_LEFT);
+        if (isset(static::$modulo[$this->instanceID])) {
+            $length = static::$modulo[$this->instanceID]->getLengthInBytes();
+            return \str_pad($this->value->toBytes(), $length, "\x00", \STR_PAD_LEFT);
+        }
+        return $this->value->toBytes();
     }
     /**
      * Converts an Integer to a hex string (eg. base-16).
@@ -286,7 +307,7 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
      */
     public function toHex()
     {
-        return \WPStaging\Vendor\phpseclib3\Common\Functions\Strings::bin2hex($this->toBytes());
+        return Strings::bin2hex($this->toBytes());
     }
     /**
      * Converts an Integer to a bit string (eg. base-2).
@@ -311,13 +332,14 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
     public function getNAF($w = 1)
     {
         $w++;
-        $mask = new \WPStaging\Vendor\phpseclib3\Math\BigInteger((1 << $w) - 1);
-        $sub = new \WPStaging\Vendor\phpseclib3\Math\BigInteger(1 << $w);
+        $zero =& static::$zero[$this->instanceID];
+        $mask = new BigInteger((1 << $w) - 1);
+        $sub = new BigInteger(1 << $w);
         //$sub = new BigInteger(1 << ($w - 1));
         $d = $this->toBigInteger();
         $d_i = [];
         $i = 0;
-        while ($d->compare(static::$zero[static::class]) > 0) {
+        while ($d->compare($zero) > 0) {
             if ($d->isOdd()) {
                 // start mods
                 $bigInteger = $d->testBit($w - 1) ? $d->bitwise_and($mask)->subtract($sub) : $d->bitwise_and($mask);
@@ -327,7 +349,7 @@ class Integer extends \WPStaging\Vendor\phpseclib3\Math\Common\FiniteField\Integ
             } else {
                 $d_i[$i] = 0;
             }
-            $shift = !$d->equals(static::$zero[static::class]) && $d->bitwise_and($mask)->equals(static::$zero[static::class]) ? $w : 1;
+            $shift = !$d->equals($zero) && $d->bitwise_and($mask)->equals($zero) ? $w : 1;
             // $w or $w + 1?
             $d = $d->bitwise_rightShift($shift);
             while (--$shift > 0) {

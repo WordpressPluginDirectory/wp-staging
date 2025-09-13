@@ -37,7 +37,7 @@ class Assets
 
     private $accessToken;
 
-    private $settings;
+    protected $settings;
 
     private $analyticsConsent;
 
@@ -147,7 +147,7 @@ class Assets
     {
         $this->loadGlobalAssets($hook);
 
-        add_action(Notices::INJECT_ANALYTICS_CONSENT_ASSETS_ACTION, [$this, 'enqueueAnalyticsConsentAssets'], 10, 0);
+        add_action(Notices::ACTION_INJECT_ANALYTICS_CONSENT_ASSETS, [$this, 'enqueueAnalyticsConsentAssets'], 10, 0);
 
         // Load this css file on frontend and backend on all pages if current site is a staging site
         if ((new SiteInfo())->isStagingSite()) {
@@ -258,7 +258,7 @@ class Assets
         );
 
         // Internal hook to enqueue backup scripts, used by the backup addon
-        Hooks::doAction(BackupServiceProvider::BACKUP_SCRIPTS_ENQUEUE_ACTION);
+        Hooks::doAction(BackupServiceProvider::ACTION_BACKUP_ENQUEUE_SCRIPTS);
 
         // Load admin js pro files
         if (WPStaging::isPro()) {
@@ -300,14 +300,22 @@ class Assets
             'backupDBExtension'      => PartIdentifier::DATABASE_PART_IDENTIFIER . '.' . DatabaseImporter::FILE_FORMAT,
             'analyticsConsentAllow'  => esc_url($this->analyticsConsent->getConsentLink(true)),
             'analyticsConsentDeny'   => esc_url($this->analyticsConsent->getConsentLink(false)),
+            'analyticsConsentLater'  => esc_url($this->analyticsConsent->getRemindMeLaterConsentLink()),
             'isPro'                  => WPStaging::isPro(),
             'maxFailedRetries'       => Hooks::applyFilters(AbstractJob::TEST_FILTER_MAXIMUM_RETRIES, 10),
             'i18n'                   => $this->i18n->getTranslations(),
-            'isCloneable'            => (new SiteInfo())->isCloneable()
+            'isCloneable'            => (new SiteInfo())->isCloneable(),
+            'isTestMode'             => defined('WPSTG_TEST') && WPSTG_TEST
         ];
 
         // We need some wpstgConfig vars in the wpstg.js file (loaded with wpstg-common scripts) as well
         wp_localize_script("wpstg-common", "wpstg", $wpstgConfig);
+        // Add test mode body class if WPSTG_TEST is defined
+        if (defined('WPSTG_TEST') && WPSTG_TEST) {
+            add_filter('admin_body_class', function ($classes) {
+                return $classes . ' wpstg-test-mode';
+            });
+        }
     }
 
     public function enqueueAnalyticsConsentAssets()
@@ -537,6 +545,49 @@ class Assets
         $svgCode = file_get_contents($fullPath);
         $svgCode = preg_replace('/<svg(.*?)>/', '<svg$1 class="' . $class . '">', $svgCode);
         echo Escape::escapeHtml($svgCode);
+    }
+
+    /**
+     * @param string $title
+     * @param string $desc
+     * @param string $buttonText
+     * @param string $buttonUrl
+     */
+    public function renderAlertMessage(string $title, string $desc = '', string $buttonText = '', string $buttonUrl = null)
+    {
+        if (empty($title)) {
+            return;
+        }
+
+        ?>
+        <div class="wpstg-banner">
+            <div class="wpstg-banner-content">
+                <div class="wpstg-banner-icon">
+                    <?php $this->renderSvg('alert'); ?>
+                </div>
+                <div class="wpstg-banner-text">
+                    <h3 class="wpstg-banner-title">
+                        <?php echo esc_html($title); ?>
+                    </h3>
+
+                    <?php if (!empty($desc)) : ?>
+                        <p class="wpstg-banner-description">
+                            <?php echo wp_kses_post($desc); ?>
+                        </p>
+                    <?php endif; ?>
+
+                    <?php if (!empty($buttonText)) : ?>
+                        <?php
+                        $url = !empty($buttonUrl) ? esc_url($buttonUrl) : '#';
+                        ?>
+                        <a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener" class="wpstg-button danger wpstg-banner-button">
+                            <?php echo esc_html($buttonText); ?>
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php
     }
 
     private function getRestUrl(): string

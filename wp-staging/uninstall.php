@@ -6,6 +6,8 @@
  */
 namespace WPStaging\Backend;
 
+use WPStaging\Core\Cron\Cron;
+
 /**
  * Uninstall WP-Staging
  *
@@ -92,6 +94,7 @@ class uninstall
             delete_option('wpstg_wasabi');
             delete_option('wpstg_dropbox');
             delete_option('wpstg_one-drive');
+            delete_option('wpstg_pcloud');
             delete_option('wpstg_free_backup_notice_dismissed');
             delete_option('wpstg_first_backup_speed_index');
             delete_option('wpstg_backup_speed_index');
@@ -140,7 +143,7 @@ class uninstall
             delete_option('wpstg_warnings_notice');
 
             // Delete events
-            wp_clear_scheduled_hook('wpstg_weekly_event');
+            wp_clear_scheduled_hook(Cron::ACTION_WEEKLY_EVENT);
 
             // Transients
             delete_transient("wpstg_issue_report_submitted");

@@ -47,6 +47,7 @@ class I18n
             'cancel_modal_text'     => esc_html__('This modal will close automatically when done...', 'wp-staging'),
             'cancel_modal_error'    => esc_html__('Cancel process did not finish gracefully. Some temporary files might not have been cleaned up.', 'wp-staging'),
             'cancel_modal_confirm_text' => esc_html__('Do you want to cancel the process?', 'wp-staging'),
+            'cancel_modal_wait_text'    => esc_html__('Current job was cancelled from another page! This modal will close automatically when done...', 'wp-staging'),
             'progress'              => esc_html__('Progress', 'wp-staging'),
             'elapsed_time'          => esc_html__('Elapsed time', 'wp-staging'),
             'failed_response'       => esc_html__('Failed response', 'wp-staging'),
@@ -215,6 +216,9 @@ class I18n
                 'clicked_cloud_restore_download_body_text' => sprintf(esc_html__('You can optionally download the backup to your local device:%s', 'wp-staging'), '<div class="download-action-buttons"><a href="{downloadUrl}" class="wpstg-button wpstg-blue-primary wpstg-download-to-computer">' . esc_html__('Download to my computer', 'wp-staging') . '</a></div>'),
                 'clicked_cloud_restore_download_modal_title' => esc_html__('Backup Successfully Downloaded to this Website', 'wp-staging'),
                 'setup_download_modal_title' => esc_html__('Downloading backup from remote', 'wp-staging'),
+                'provider_failed_to_save_settings' => esc_html__('Could not save settings. Ensure that storage provider\'s credentials are correct!', 'wp-staging'),
+                'connection_test_failed_title' => esc_html__('Connection Failed', 'wp-staging'),
+                'connection_test_has_warning_title' => esc_html__('Warning', 'wp-staging'),
             ],
             'backup_create' => [
                 'create_backup_fetch_listing_error_md5' => sprintf(esc_html__('Failed to get backup md5 from response!%sResponse content:', 'wp-staging'), '<br/>'),
@@ -268,15 +272,24 @@ class I18n
             'cannot_generate_otp_error' => wp_kses(__('We couldn\'t create the verification code. This might be caused by a firewall blocking the request. The verification code is necessary for security before you can upload a backup to this site. To proceed, you can temporarily <a href="%s" target="_blank">disable the verification code generation</a> or contact WP Staging support for assistance.', 'wp-staging'), ["a" => ["href" => [], "target" => []]]),
             'memory_exhaust_error' => wp_kses(__('Read <a target="_blank" href="%s">this article</a> for solving this issue. Please contact WP Staging support if you need further assistance.', 'wp-staging'), ["a" => ["href" => [], "target" => []]]),
             'contact_us_for_help'  => esc_html__('[button]CONTACT US[/button] for help in solving this issue.', 'wp-staging'),
-            'connection_string_copied_to_clipboard' => esc_html__('Connection string copied to clipboard', 'wp-staging'),
+            'connection_key_copied_to_clipboard' => esc_html__('Connection Key copied to clipboard', 'wp-staging'),
             'remote_storage' => [
+                'host_required' => esc_html__('Host field is required.', 'wp-staging'),
+                'port_required' => esc_html__('Port field is required.', 'wp-staging'),
+                'username_required' => esc_html__('Username field is required.', 'wp-staging'),
+                'password_required' => esc_html__('Password field is required.', 'wp-staging'),
+                'password_key_required' => esc_html__('Either password or key is required.', 'wp-staging'),
+                'location_required' => esc_html__('Location field is required.', 'wp-staging'),
                 'access_key_required' => esc_html__('Access key field is required.', 'wp-staging'),
                 'secret_key_required' => esc_html__('Secret key field is required.', 'wp-staging'),
-                'location_required' => esc_html__('Bucket field is required.', 'wp-staging'),
-                'save_settings_abort_error' => esc_html__('Could not save settings. Ensure SFTP credentials are correct! (Hostname, port...) Please try again!', 'wp-staging'),
+                'bucket_location_required' => esc_html__('Bucket field is required.', 'wp-staging'),
+                'custom_region_required' => esc_html__('Custom region is required.', 'wp-staging'),
+                'save_settings_abort_error' => esc_html__('Could not save settings. Ensure credentials are correct! Please try again!', 'wp-staging'),
                 'test_connection_abort_error' => esc_html__('No response from server! Ensure credentials are correct. Please try again.', 'wp-staging'),
                 'delete_storage_provider_settings_confirm' => esc_html__('Are you sure you want to delete %s settings?', 'wp-staging'),
-            ]
+            ],
+            'background_logger_wait'     => esc_html__('Initializing. Please wait, process is starting...', 'wp-staging'),
+            'cannot_generate_login_link' => esc_html__('Fail to create a temporary login link. Please make sure your staging site is properly configured and try again. If the issue persists, contact WP STAGING support for assistance.', 'wp-staging'),
         ];
     }
 }

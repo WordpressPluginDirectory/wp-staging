@@ -4,6 +4,7 @@ namespace WPStaging\Framework\Traits;
 
 use Exception;
 use RuntimeException;
+use WPStaging\Core\Utils\Logger;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Filesystem\Filesystem;
 use WPStaging\Framework\Filesystem\FilterableDirectoryIterator;
@@ -26,6 +27,11 @@ trait FileScanToCacheTrait
     protected $strUtils;
 
     /**
+     * @var Logger
+     */
+    protected $logger;
+
+    /**
      * Write contents to a file
      *
      * @param resource $handle File handle to write to
@@ -44,14 +50,21 @@ trait FileScanToCacheTrait
      * @param array $excludePaths absolute path of dir/files to exclude
      * @param array $excludeSizeRules exclude files by different size comparing rules
      * @param string $wpRootPath
+     * @param bool $shouldScanEmptyDirs
      *
      * @return int count of files path written to cache file
      * @throws Exception
      */
-    public function scanToCacheFile($filesHandle, $path, $isRecursive = false, $excludePaths = [], $excludeSizeRules = [], $wpRootPath = ABSPATH)
+    public function scanToCacheFile($filesHandle, $path, $isRecursive = false, $excludePaths = [], $excludeSizeRules = [], $wpRootPath = ABSPATH, bool $shouldScanEmptyDirs = true)
     {
-        $filesystem = WPStaging::make(Filesystem::class);
+        if (!is_readable($path)) {
+            $this->log(sprintf('Skipping! The path "%s" is not readable.', $path), Logger::TYPE_WARNING);
+            return 0;
+        }
+
+        $filesystem       = WPStaging::make(Filesystem::class);
         $normalizedWpRoot = $filesystem->normalizePath($wpRootPath);
+
         if (is_file($path)) {
             $file = str_replace($normalizedWpRoot, '', $filesystem->normalizePath($path, true));
             $file = $this->replaceEOLsWithPlaceholders($file) . PHP_EOL;
@@ -63,11 +76,6 @@ trait FileScanToCacheTrait
         }
 
         $filesWrittenToCache = 0;
-
-        if (!file_exists($path)) {
-            return 0;
-        }
-
         try {
             $iterator = (new FilterableDirectoryIterator())
                             ->setDirectory($filesystem->trailingSlashit($path))
@@ -84,14 +92,14 @@ trait FileScanToCacheTrait
                 if ($item->isLink()) {
                     // Allow copying of link if the link's source is a directory
                     if (is_dir($item->getRealPath()) && $isRecursive) {
-                        $filesWrittenToCache += $this->scanToCacheFile($filesHandle, $itemPath, $isRecursive, $excludePaths, $excludeSizeRules, $wpRootPath);
+                        $filesWrittenToCache += $this->scanToCacheFile($filesHandle, $itemPath, $isRecursive, $excludePaths, $excludeSizeRules, $wpRootPath, $shouldScanEmptyDirs);
                     }
 
                     continue;
                 }
 
                 if ($isRecursive && $item->isDir()) {
-                    $filesWrittenToCache += $this->scanToCacheFile($filesHandle, $itemPath, $isRecursive, $excludePaths, $excludeSizeRules, $wpRootPath);
+                    $filesWrittenToCache += $this->scanToCacheFile($filesHandle, $itemPath, $isRecursive, $excludePaths, $excludeSizeRules, $wpRootPath, $shouldScanEmptyDirs);
                     continue;
                 }
 
@@ -114,6 +122,12 @@ trait FileScanToCacheTrait
             }
         } catch (Exception $e) {
             throw new RuntimeException($e->getMessage());
+        }
+
+        if ($shouldScanEmptyDirs && $filesWrittenToCache === 0 && is_dir($path)) {
+            $pathPart = $this->strUtils->replaceStartWith($normalizedWpRoot, '', $path) . PHP_EOL;
+            $this->write($filesHandle, $this->pathIdentifier . ltrim($pathPart, '/'));
+            $filesWrittenToCache++;
         }
 
         return $filesWrittenToCache;
@@ -141,5 +155,20 @@ trait FileScanToCacheTrait
     protected function setPathIdentifier($pathIdentifier)
     {
         $this->pathIdentifier = $pathIdentifier;
+    }
+
+    /**
+     * @param string $msg
+     * @param string $type
+     *
+     * @return void
+     */
+    public function log($msg, $type = Logger::TYPE_INFO)
+    {
+        if ($this->logger === null) {
+            $this->logger = WPStaging::make(Logger::class);
+        }
+
+        $this->logger->add($msg, $type);
     }
 }

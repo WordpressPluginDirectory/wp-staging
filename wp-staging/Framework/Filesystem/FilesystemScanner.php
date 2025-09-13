@@ -47,6 +47,12 @@ class FilesystemScanner extends AbstractFilesystemScanner
     /** @var bool */
     protected $isSiteHostedOnWordPressCom = false;
 
+    /** @var array */
+    protected $folderNameRules = [];
+
+    /** @var array */
+    protected $fileNameRules = [];
+
     /**
      * @param Directory $directory
      * @param PathIdentifier $pathIdentifier
@@ -79,6 +85,18 @@ class FilesystemScanner extends AbstractFilesystemScanner
         $this->ignoreFileBiggerThan               = $ignoreFileBiggerThan;
         $this->ignoreFileExtensions               = $ignoreFileExtensions;
         $this->ignoreFileExtensionFilesBiggerThan = $ignoreFileExtensionFilesBiggerThan;
+    }
+
+    /**
+     * Set the rules to exclude folders and files according to their names.
+     *
+     * @param array $folderNameRules
+     * @param array $fileNameRules
+     */
+    public function setNameExcludeRules(array $folderNameRules, array $fileNameRules)
+    {
+        $this->folderNameRules = $folderNameRules;
+        $this->fileNameRules   = $fileNameRules;
     }
 
     /**
@@ -184,15 +202,18 @@ class FilesystemScanner extends AbstractFilesystemScanner
     {
         $normalizedPath = $this->filesystem->normalizePath($file->getPathname(), !$file->isFile());
         $fileSize       = $file->getSize();
-
         $fileExtension  = $file->getExtension();
+
+        if ($this->isExcludeByFileNameRule($file->getFilename())) {
+            return;
+        }
 
         // Lazy-built relative path
         $relativePath = str_replace($this->filesystem->normalizePath(ABSPATH, true), '', $normalizedPath);
 
         if ($this->canExcludeLogFile($fileExtension) || $this->canExcludeCacheFile($fileExtension) || isset($this->ignoreFileExtensions[$fileExtension])) {
             // Early bail: File has an ignored extension
-            $this->logger->info(sprintf(
+            $this->logger->notice(sprintf(
                 '%s: Skipped file: "%s". Extension: "%s" is excluded by rule.',
                 esc_html($this->logTitle),
                 esc_html($relativePath),
@@ -205,7 +226,7 @@ class FilesystemScanner extends AbstractFilesystemScanner
         if (isset($this->ignoreFileExtensionFilesBiggerThan[$fileExtension])) {
             if ($fileSize > $this->ignoreFileExtensionFilesBiggerThan[$fileExtension]) {
                 // Early bail: File bigger than expected for given extension
-                $this->logger->info(sprintf(
+                $this->logger->notice(sprintf(
                     '%s: Skipped file "%s" (%s). It exceeds the maximum allowed file size for files with the extension "%s" (%s).',
                     esc_html($this->logTitle),
                     esc_html($relativePath),
@@ -218,8 +239,8 @@ class FilesystemScanner extends AbstractFilesystemScanner
             }
         } elseif ($fileSize > $this->ignoreFileBiggerThan) {
             // Early bail: File is larger than max allowed size.
-            $this->logger->info(sprintf(
-                '%s: Skipped file "%s" (%s). It exceeds the maximum file size for backup (%s).',
+            $this->logger->notice(sprintf(
+                '%s: Skipped file "%s" (%s). It exceeds the maximum file size (%s).',
                 esc_html($this->logTitle),
                 esc_html($relativePath),
                 size_format($fileSize),
@@ -288,7 +309,7 @@ class FilesystemScanner extends AbstractFilesystemScanner
         if (in_array($normalizedPath, $this->scannerDto->getExcludedDirectories())) {
             $relativePathForLogging = str_replace($this->filesystem->normalizePath(WP_CONTENT_DIR, true), '', $normalizedPath);
 
-            $this->logger->info(sprintf(
+            $this->logger->notice(sprintf(
                 '%s: Skipped directory "%s". Excluded by rule',
                 esc_html($this->logTitle),
                 esc_html($relativePathForLogging)
@@ -343,6 +364,50 @@ class FilesystemScanner extends AbstractFilesystemScanner
         return is_numeric($dir->getBasename()) && $dir->getBasename() > 1970 && $dir->getBasename() < 2100;
     }
 
+    protected function isExcludeByFileNameRule(string $fileName): bool
+    {
+        if (empty($this->fileNameRules)) {
+            return false;
+        }
+
+        foreach ($this->fileNameRules as $rule) {
+            if ($this->ruleMatch($rule, $fileName)) {
+                $this->logger->info(sprintf(
+                    '%s: Skipped file "%s". Excluded by file name rule: "%s".',
+                    esc_html($this->logTitle),
+                    esc_html($fileName),
+                    esc_html($rule)
+                ));
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function isExcludeByFolderNameRule(string $folderName): bool
+    {
+        if (empty($this->folderNameRules)) {
+            return false;
+        }
+
+        foreach ($this->folderNameRules as $rule) {
+            if ($this->ruleMatch($rule, $folderName)) {
+                $this->logger->info(sprintf(
+                    '%s: Skipped directory "%s". Excluded by folder name rule: "%s".',
+                    esc_html($this->logTitle),
+                    esc_html($folderName),
+                    esc_html($rule)
+                ));
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * @param string $fileExtension
      * @return bool
@@ -395,7 +460,7 @@ class FilesystemScanner extends AbstractFilesystemScanner
             return false;
         }
 
-        $this->logger->info(sprintf(
+        $this->logger->notice(sprintf(
             '%s: Skipped directory "%s". Excluded by smart exclusion rule: Excluding cache folder.',
             esc_html($this->logTitle),
             esc_html($dir->getRealPath())
@@ -415,5 +480,29 @@ class FilesystemScanner extends AbstractFilesystemScanner
         $pathParts = explode(DIRECTORY_SEPARATOR, $path);
 
         return in_array('cache', $pathParts);
+    }
+
+    private function ruleMatch(string $rule, string $name): bool
+    {
+        $rule = trim($rule);
+        if (strpos($rule, ' ') === false) {
+            // Malformed rule, treat as no match
+            return false;
+        }
+
+        list($ruleType, $ruleValue) = explode(' ', $rule, 2);
+        switch ($ruleType) {
+            case 'name_contains':
+                return strpos($name, $ruleValue) !== false;
+            case 'name_begins_with':
+                return strpos($name, $ruleValue) === 0;
+            case 'name_ends_with':
+                return substr($name, -strlen($ruleValue)) === $ruleValue;
+            case 'name_exact_matches':
+                return $name === $ruleValue;
+            default:
+                // Unknown rule type, treat as no match
+                return false;
+        }
     }
 }

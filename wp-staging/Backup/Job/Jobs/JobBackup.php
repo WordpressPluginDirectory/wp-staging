@@ -7,6 +7,7 @@ use WPStaging\Backup\Task\Tasks\JobBackup\BackupMuPluginsTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\BackupOtherFilesTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\BackupPluginsTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\BackupRequirementsCheckTask;
+use WPStaging\Backup\Task\Tasks\JobBackup\CleanupValidationFilesTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\BackupThemesTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\BackupUploadsTask;
 use WPStaging\Backup\Task\Tasks\JobBackup\DatabaseBackupTask;
@@ -100,7 +101,6 @@ class JobBackup extends AbstractJob
 
         $this->addDatabaseTasks();
 
-        $this->addCompressionTask();
         $this->addFinalizeTask();
         if ($this->jobDataDto->getRepeatBackupOnSchedule()) {
             $this->addSchedulerTask();
@@ -161,6 +161,7 @@ class JobBackup extends AbstractJob
     protected function addValidationTasks()
     {
         $this->tasks[] = ValidateBackupTask::class;
+        $this->tasks[] = CleanupValidationFilesTask::class;
     }
 
     /**

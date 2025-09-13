@@ -7,23 +7,23 @@ use OutOfRangeException;
 use RuntimeException;
 use WPStaging\Backup\BackupFileIndex;
 use WPStaging\Backup\BackupHeader;
-use WPStaging\Framework\Job\Exception\DiskNotWritableException;
+use WPStaging\Backup\BackupValidator;
+use WPStaging\Backup\Exceptions\EmptyChunkException;
+use WPStaging\Backup\FileHeader;
+use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Adapter\Directory;
+use WPStaging\Framework\Job\Exception\DiskNotWritableException;
+use WPStaging\Framework\Job\Exception\FileValidationException;
+use WPStaging\Framework\Facades\Hooks;
 use WPStaging\Framework\Filesystem\FileObject;
 use WPStaging\Framework\Filesystem\DiskWriteCheck;
 use WPStaging\Framework\Filesystem\MissingFileException;
 use WPStaging\Framework\Filesystem\PathIdentifier;
+use WPStaging\Framework\Filesystem\Permissions;
 use WPStaging\Framework\Queue\FinishedQueueException;
 use WPStaging\Framework\Traits\ResourceTrait;
 use WPStaging\Framework\Traits\RestoreFileExclusionTrait;
 use WPStaging\Vendor\Psr\Log\LoggerInterface;
-use WPStaging\Backup\BackupValidator;
-use WPStaging\Backup\Exceptions\EmptyChunkException;
-use WPStaging\Framework\Job\Exception\FileValidationException;
-use WPStaging\Backup\FileHeader;
-use WPStaging\Core\WPStaging;
-use WPStaging\Framework\Facades\Hooks;
-use WPStaging\Framework\Filesystem\Permissions;
 
 class Extractor extends AbstractExtractor
 {
@@ -303,8 +303,15 @@ class Extractor extends AbstractExtractor
             $chunk = null;
             try {
                 $chunk = $this->zlibCompressor->getService()->readChunk($this->wpstgFile, $this->extractingFile, function ($currentChunkNumber) use (&$lastDebugMessage) {
-                    $lastDebugMessage = sprintf('DEBUG: Extracting chunk %d/%d', $currentChunkNumber, $this->extractorDto->getTotalChunks());
+                    // Log every 200 chunks to provide progress updates without overwhelming the logs.
+                    if ($currentChunkNumber % 200 === 0 || $currentChunkNumber === $this->extractorDto->getTotalChunks()) {
+                        $lastDebugMessage = sprintf('DEBUG: Extracting chunk %d/%d', $currentChunkNumber, $this->extractorDto->getTotalChunks());
+                    }
                 });
+            } catch (DiskNotWritableException $ex) {
+                $this->diskWriteCheck->testDiskIsWriteable();
+                // If empty chunk, it is an empty file, so we can skip it
+                throw new Exception("Unable to extract file to $destinationFilePath. Please check if there is enough disk space available.");
             } catch (EmptyChunkException $ex) {
                 // If empty chunk, it is an empty file, so we can skip it
                 continue;
@@ -324,7 +331,8 @@ class Extractor extends AbstractExtractor
 
             $readBytesAfter = $this->wpstgFile->ftell() - $readBytesBefore;
 
-            $this->extractingFile->addWrittenBytes($readBytesAfter);
+            $this->extractingFile->addReadBytes($readBytesAfter);
+            $this->extractingFile->addWrittenBytes($writtenBytes);
         }
 
         if (!empty($lastDebugMessage)) {

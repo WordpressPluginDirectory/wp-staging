@@ -87,7 +87,7 @@ class BigInteger implements \JsonSerializable
             throw new \InvalidArgumentException("{$main} is not a valid engine");
         }
         if (!$fqmain::isValidEngine()) {
-            throw new \WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException("{$main} is not setup correctly on this system");
+            throw new BadConfigurationException("{$main} is not setup correctly on this system");
         }
         /** @var class-string<Engine> $fqmain */
         self::$mainEngine = $fqmain;
@@ -101,7 +101,7 @@ class BigInteger implements \JsonSerializable
             }
         }
         if (!$found) {
-            throw new \WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException("No valid modular exponentiation engine found for {$main}");
+            throw new BadConfigurationException("No valid modular exponentiation engine found for {$main}");
         }
         self::$engines = [$main, $modexp];
     }
@@ -121,14 +121,20 @@ class BigInteger implements \JsonSerializable
     private static function initialize_static_variables()
     {
         if (!isset(self::$mainEngine)) {
-            $engines = [['GMP'], ['PHP64', ['OpenSSL']], ['BCMath', ['OpenSSL']], ['PHP32', ['OpenSSL']], ['PHP64', ['DefaultEngine']], ['PHP32', ['DefaultEngine']]];
+            $engines = [['GMP', ['DefaultEngine']], ['PHP64', ['OpenSSL']], ['BCMath', ['OpenSSL']], ['PHP32', ['OpenSSL']], ['PHP64', ['DefaultEngine']], ['PHP32', ['DefaultEngine']]];
+            // per https://phpseclib.com/docs/speed PHP 8.4.0+ _significantly_ sped up BCMath
+            if (\version_compare(\PHP_VERSION, '8.4.0') >= 0) {
+                $engines[1][0] = 'BCMath';
+                $engines[2][0] = 'PHP64';
+            }
             foreach ($engines as $engine) {
                 try {
-                    self::setEngine($engine[0], isset($engine[1]) ? $engine[1] : []);
-                    break;
+                    self::setEngine($engine[0], $engine[1]);
+                    return;
                 } catch (\Exception $e) {
                 }
             }
+            throw new \UnexpectedValueException('No valid BigInteger found. This is only possible when JIT is enabled on Windows and neither the GMP or BCMath extensions are available so either disable JIT or install GMP / BCMath');
         }
     }
     /**
@@ -137,7 +143,7 @@ class BigInteger implements \JsonSerializable
      * If the second parameter - $base - is negative, then it will be assumed that the number's are encoded using
      * two's compliment.  The sole exception to this is -10, which is treated the same as 10 is.
      *
-     * @param string|int|BigInteger\Engines\Engine $x Base-10 number or base-$base number if $base set.
+     * @param string|int|Engine $x Base-10 number or base-$base number if $base set.
      * @param int $base
      */
     public function __construct($x = 0, $base = 10)
@@ -145,7 +151,7 @@ class BigInteger implements \JsonSerializable
         self::initialize_static_variables();
         if ($x instanceof self::$mainEngine) {
             $this->value = clone $x;
-        } elseif ($x instanceof \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\Engine) {
+        } elseif ($x instanceof Engine) {
             $this->value = new static("{$x}");
             $this->value->setPrecision($x->getPrecision());
         } else {
@@ -216,7 +222,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $y
      * @return BigInteger
      */
-    public function add(\WPStaging\Vendor\phpseclib3\Math\BigInteger $y)
+    public function add(BigInteger $y)
     {
         return new static($this->value->add($y->value));
     }
@@ -226,7 +232,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $y
      * @return BigInteger
      */
-    public function subtract(\WPStaging\Vendor\phpseclib3\Math\BigInteger $y)
+    public function subtract(BigInteger $y)
     {
         return new static($this->value->subtract($y->value));
     }
@@ -236,7 +242,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $x
      * @return BigInteger
      */
-    public function multiply(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function multiply(BigInteger $x)
     {
         return new static($this->value->multiply($x->value));
     }
@@ -265,7 +271,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $y
      * @return BigInteger[]
      */
-    public function divide(\WPStaging\Vendor\phpseclib3\Math\BigInteger $y)
+    public function divide(BigInteger $y)
     {
         list($q, $r) = $this->value->divide($y->value);
         return [new static($q), new static($r)];
@@ -278,7 +284,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger
      */
-    public function modInverse(\WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function modInverse(BigInteger $n)
     {
         return new static($this->value->modInverse($n->value));
     }
@@ -290,14 +296,12 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger[]
      */
-    public function extendedGCD(\WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function extendedGCD(BigInteger $n)
     {
-        \extract($this->value->extendedGCD($n->value));
-        /**
-         * @var BigInteger $gcd
-         * @var BigInteger $x
-         * @var BigInteger $y
-         */
+        $extended = $this->value->extendedGCD($n->value);
+        $gcd = $extended['gcd'];
+        $x = $extended['x'];
+        $y = $extended['y'];
         return ['gcd' => new static($gcd), 'x' => new static($x), 'y' => new static($y)];
     }
     /**
@@ -308,7 +312,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger
      */
-    public function gcd(\WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function gcd(BigInteger $n)
     {
         return new static($this->value->gcd($n->value));
     }
@@ -405,7 +409,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger
      */
-    public function powMod(\WPStaging\Vendor\phpseclib3\Math\BigInteger $e, \WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function powMod(BigInteger $e, BigInteger $n)
     {
         return new static($this->value->powMod($e->value, $n->value));
     }
@@ -416,7 +420,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger
      */
-    public function modPow(\WPStaging\Vendor\phpseclib3\Math\BigInteger $e, \WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function modPow(BigInteger $e, BigInteger $n)
     {
         return new static($this->value->modPow($e->value, $n->value));
     }
@@ -438,7 +442,7 @@ class BigInteger implements \JsonSerializable
      * @return int in case < 0 if $this is less than $y; > 0 if $this is greater than $y, and 0 if they are equal.
      * @see self::equals()
      */
-    public function compare(\WPStaging\Vendor\phpseclib3\Math\BigInteger $y)
+    public function compare(BigInteger $y)
     {
         return $this->value->compare($y->value);
     }
@@ -450,7 +454,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $x
      * @return bool
      */
-    public function equals(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function equals(BigInteger $x)
     {
         return $this->value->equals($x->value);
     }
@@ -469,7 +473,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $x
      * @return BigInteger
      */
-    public function bitwise_and(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function bitwise_and(BigInteger $x)
     {
         return new static($this->value->bitwise_and($x->value));
     }
@@ -479,7 +483,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $x
      * @return BigInteger
      */
-    public function bitwise_or(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function bitwise_or(BigInteger $x)
     {
         return new static($this->value->bitwise_or($x->value));
     }
@@ -489,7 +493,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $x
      * @return BigInteger
      */
-    public function bitwise_xor(\WPStaging\Vendor\phpseclib3\Math\BigInteger $x)
+    public function bitwise_xor(BigInteger $x)
     {
         return new static($this->value->bitwise_xor($x->value));
     }
@@ -551,10 +555,9 @@ class BigInteger implements \JsonSerializable
     {
         self::initialize_static_variables();
         $class = self::$mainEngine;
-        \extract($class::minMaxBits($bits));
-        /** @var BigInteger $min
-         * @var BigInteger $max
-         */
+        $minMax = $class::minMaxBits($bits);
+        $min = $minMax['min'];
+        $max = $minMax['max'];
         return ['min' => new static($min), 'max' => new static($max)];
     }
     /**
@@ -612,7 +615,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $max
      * @return false|BigInteger
      */
-    public static function randomRangePrime(\WPStaging\Vendor\phpseclib3\Math\BigInteger $min, \WPStaging\Vendor\phpseclib3\Math\BigInteger $max)
+    public static function randomRangePrime(BigInteger $min, BigInteger $max)
     {
         $class = self::$mainEngine;
         return new static($class::randomRangePrime($min->value, $max->value));
@@ -630,7 +633,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $max
      * @return BigInteger
      */
-    public static function randomRange(\WPStaging\Vendor\phpseclib3\Math\BigInteger $min, \WPStaging\Vendor\phpseclib3\Math\BigInteger $max)
+    public static function randomRange(BigInteger $min, BigInteger $max)
     {
         $class = self::$mainEngine;
         return new static($class::randomRange($min->value, $max->value));
@@ -667,7 +670,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $n
      * @return BigInteger
      */
-    public function pow(\WPStaging\Vendor\phpseclib3\Math\BigInteger $n)
+    public function pow(BigInteger $n)
     {
         return new static($this->value->pow($n->value));
     }
@@ -677,7 +680,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger ...$nums
      * @return BigInteger
      */
-    public static function min(\WPStaging\Vendor\phpseclib3\Math\BigInteger ...$nums)
+    public static function min(BigInteger ...$nums)
     {
         $class = self::$mainEngine;
         $nums = \array_map(function ($num) {
@@ -691,7 +694,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger ...$nums
      * @return BigInteger
      */
-    public static function max(\WPStaging\Vendor\phpseclib3\Math\BigInteger ...$nums)
+    public static function max(BigInteger ...$nums)
     {
         $class = self::$mainEngine;
         $nums = \array_map(function ($num) {
@@ -706,7 +709,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $max
      * @return bool
      */
-    public function between(\WPStaging\Vendor\phpseclib3\Math\BigInteger $min, \WPStaging\Vendor\phpseclib3\Math\BigInteger $max)
+    public function between(BigInteger $min, BigInteger $max)
     {
         return $this->value->between($min->value, $max->value);
     }
@@ -764,7 +767,7 @@ class BigInteger implements \JsonSerializable
      * @param BigInteger $r
      * @return int
      */
-    public static function scan1divide(\WPStaging\Vendor\phpseclib3\Math\BigInteger $r)
+    public static function scan1divide(BigInteger $r)
     {
         $class = self::$mainEngine;
         return $class::scan1divide($r->value);
@@ -780,7 +783,7 @@ class BigInteger implements \JsonSerializable
     public function createRecurringModuloFunction()
     {
         $func = $this->value->createRecurringModuloFunction();
-        return function (\WPStaging\Vendor\phpseclib3\Math\BigInteger $x) use($func) {
+        return function (BigInteger $x) use($func) {
             return new static($func($x->value));
         };
     }

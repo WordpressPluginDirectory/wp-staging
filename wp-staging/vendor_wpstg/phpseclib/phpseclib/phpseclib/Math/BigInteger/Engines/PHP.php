@@ -19,7 +19,7 @@ use WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException;
  *
  * @author  Jim Wigginton <terrafrost@php.net>
  */
-abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\Engine
+abstract class PHP extends Engine
 {
     /**#@+
      * Array constants
@@ -71,7 +71,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
             static::$isValidEngine[static::class] = static::isValidEngine();
         }
         if (!static::$isValidEngine[static::class]) {
-            throw new \WPStaging\Vendor\phpseclib3\Exception\BadConfigurationException(static::class . ' is not setup correctly on this system');
+            throw new BadConfigurationException(static::class . ' is not setup correctly on this system');
         }
         $this->value = [];
         parent::__construct($x, $base);
@@ -87,7 +87,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
         switch (\abs($base)) {
             case 16:
                 $x = \strlen($this->value) & 1 ? '0' . $this->value : $this->value;
-                $temp = new static(\WPStaging\Vendor\phpseclib3\Common\Functions\Strings::hex2bin($x), 256);
+                $temp = new static(Strings::hex2bin($x), 256);
                 $this->value = $temp->value;
                 break;
             case 10:
@@ -118,7 +118,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
     {
         $length = \strlen($str);
         $pad = 4 - \strlen($str) % 4;
-        return \str_pad($str, $length + $pad, "\0", \STR_PAD_LEFT);
+        return \str_pad($str, $length + $pad, "\x00", \STR_PAD_LEFT);
     }
     /**
      * Converts a BigInteger to a base-10 number.
@@ -409,13 +409,16 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
      * @internal This function is based off of
      *     {@link http://www.cacr.math.uwaterloo.ca/hac/about/chap14.pdf#page=9 HAC 14.20}.
      */
-    protected function divideHelper(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $y)
+    protected function divideHelper(PHP $y)
     {
         if (\count($y->value) == 1) {
             list($q, $r) = $this->divide_digit($this->value, $y->value[0]);
             $quotient = new static();
             $remainder = new static();
             $quotient->value = $q;
+            if ($this->is_negative) {
+                $r = $y->value[0] - $r;
+            }
             $remainder->value = [$r];
             $quotient->is_negative = $this->is_negative != $y->is_negative;
             return [$this->normalize($quotient), $this->normalize($remainder)];
@@ -579,7 +582,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
      * @param PHP $result
      * @return static
      */
-    protected function normalize(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $result)
+    protected function normalize(PHP $result)
     {
         $result->precision = $this->precision;
         $result->bitmask = $this->bitmask;
@@ -774,13 +777,13 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
      * @param PHP $n
      * @return PHP
      */
-    protected function powModInner(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $e, \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $n)
+    protected function powModInner(PHP $e, PHP $n)
     {
         try {
             $class = static::$modexpEngine[static::class];
             return $class::powModHelper($this, $e, $n, static::class);
         } catch (\Exception $err) {
-            return \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP\DefaultEngine::powModHelper($this, $e, $n, static::class);
+            return PHP\DefaultEngine::powModHelper($this, $e, $n, static::class);
         }
     }
     /**
@@ -900,7 +903,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
      * @return int
      * @see self::isPrime()
      */
-    public static function scan1divide(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $r)
+    public static function scan1divide(PHP $r)
     {
         $r_value =& $r->value;
         for ($i = 0, $r_length = \count($r_value); $i < $r_length; ++$i) {
@@ -921,7 +924,7 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
      * @param PHP $n
      * @return PHP
      */
-    protected function powHelper(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\PHP $n)
+    protected function powHelper(PHP $n)
     {
         if ($n->compare(static::$zero[static::class]) == 0) {
             return new static(1);
@@ -1082,5 +1085,29 @@ abstract class PHP extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\
             unset($vals[\count($vals) - 1]);
         }
         return \array_reverse($vals);
+    }
+    /**
+     * @return bool
+     */
+    protected static function testJITOnWindows()
+    {
+        // see https://github.com/php/php-src/issues/11917
+        if (\strtoupper(\substr(\PHP_OS, 0, 3)) === 'WIN' && \function_exists('opcache_get_status') && \PHP_VERSION_ID < 80213 && !\defined('WPStaging\\Vendor\\PHPSECLIB_ALLOW_JIT')) {
+            $status = \opcache_get_status();
+            if ($status && isset($status['jit']) && $status['jit']['enabled'] && $status['jit']['on']) {
+                return \true;
+            }
+        }
+        return \false;
+    }
+    /**
+     * Return the size of a BigInteger in bits
+     *
+     * @return int
+     */
+    public function getLength()
+    {
+        $max = \count($this->value) - 1;
+        return $max != -1 ? $max * static::BASE + \intval(\ceil(\log($this->value[$max] + 1, 2))) : 0;
     }
 }

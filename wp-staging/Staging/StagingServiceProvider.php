@@ -49,13 +49,13 @@ class StagingServiceProvider extends FeatureServiceProvider
         add_action('wp_ajax_wpstg--staging-site--listing', $this->container->callback(Listing::class, 'ajaxListing')); // phpcs:ignore WPStaging.Security.AuthorizationChecked
         add_action('wp_ajax_wpstg--staging-site--fix-option', $this->container->callback(Repair::class, 'ajaxFixOption')); // phpcs:ignore WPStaging.Security.AuthorizationChecked
         add_action('wp_ajax_wpstg--staging-site--report-option', $this->container->callback(Repair::class, 'ajaxReportOption')); // phpcs:ignore WPStaging.Security.AuthorizationChecked
-        add_action('wpstg_cloning_complete', $this->container->callback(MalCare::class, 'maybeDisableMalCare')); // phpcs:ignore WPStaging.Security.AuthorizationChecked
+        add_action(StagingSiteCreate::ACTION_CLONING_COMPLETE, $this->container->callback(MalCare::class, 'maybeDisableMalCare'));
         $this->enqueueStagingAjaxListeners();
     }
 
     protected function enqueueStagingAjaxListeners()
     {
-        if (!defined('WPSTG_NEW_STAGING')) {
+        if (!defined('WPSTG_NEW_STAGING') || !WPSTG_NEW_STAGING) {
             return;
         }
 

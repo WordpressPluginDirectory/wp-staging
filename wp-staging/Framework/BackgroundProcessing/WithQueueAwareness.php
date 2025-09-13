@@ -57,8 +57,8 @@ trait WithQueueAwareness
         }
 
         $ajaxUrl = add_query_arg([
-            'action'      => QueueProcessor::QUEUE_PROCESS_ACTION,
-            '_ajax_nonce' => wp_create_nonce(QueueProcessor::QUEUE_PROCESS_ACTION)
+            'action'      => QueueProcessor::ACTION_QUEUE_PROCESS,
+            '_ajax_nonce' => wp_create_nonce(QueueProcessor::ACTION_QUEUE_PROCESS)
         ], admin_url('admin-ajax.php'));
 
         $useGetMethod = false;
@@ -91,12 +91,12 @@ trait WithQueueAwareness
 
         $response = wp_remote_request(esc_url_raw($ajaxUrl), [
             'headers'   => [
-                'X-WPSTG-Request' => QueueProcessor::QUEUE_PROCESS_ACTION,
+                'X-WPSTG-Request' => QueueProcessor::ACTION_QUEUE_PROCESS,
             ],
             'method'    => $useGetMethod ? 'GET' : 'POST',
-            'blocking'  => false,
-            'timeout'   => 0.01,
-            'cookies'   => !empty($_COOKIE) ? $_COOKIE : [],
+            'blocking'  => $this->useBlockingRequest(),
+            'timeout'   => $this->useBlockingRequest() ? 30 : 0.01, // 0.01 for a non-blocking request
+            'cookies'   => $this->getLoginRelatedCookies(),
             'sslverify' => apply_filters('https_local_ssl_verify', false),
             'body'      => $this->normalizeAjaxRequestBody($bodyData),
         ]);
@@ -163,11 +163,11 @@ trait WithQueueAwareness
         // Let send a blocking request to check if POST method works
         $response = wp_remote_post(esc_url_raw($ajaxUrl), [
             'headers'   => [
-                'X-WPSTG-Request' => QueueProcessor::QUEUE_PROCESS_ACTION,
+                'X-WPSTG-Request' => QueueProcessor::ACTION_QUEUE_PROCESS,
             ],
             'blocking'  => true,
             'timeout'   => 10,
-            'cookies'   => !empty($_COOKIE) ? $_COOKIE : [],
+            'cookies'   => $this->getLoginRelatedCookies(),
             'sslverify' => apply_filters('https_local_ssl_verify', false),
             'body'      => $this->normalizeAjaxRequestBody($bodyData),
         ]);
@@ -193,5 +193,50 @@ trait WithQueueAwareness
         }
 
         return false;
+    }
+
+    private function useBlockingRequest(): bool
+    {
+        // Early bail if we are doing ajax request
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return false;
+        }
+
+        // Only use blocking request if we are in a local environment
+        return function_exists('wp_get_environment_type') && wp_get_environment_type() === 'local';
+    }
+
+    /**
+     * Keep only the WordPress login-related cookies to avoid oversized headers.
+     * Kept:
+     *  - wordpress_[hash]
+     *  - wordpress_sec_[hash]
+     *  - wordpress_logged_in_[hash]
+     *
+     * @return array<string,string>
+     */
+    private function getLoginRelatedCookies(): array
+    {
+        if (empty($_COOKIE) || !is_array($_COOKIE)) {
+            return [];
+        }
+
+        $allowed = [];
+        foreach ($_COOKIE as $name => $value) {
+            if (!is_string($name)) {
+                continue;
+            }
+
+            // Matches: wordpress_[32hex], wordpress_sec_[32hex], wordpress_logged_in_[32hex]
+            if (!preg_match('/^wordpress_(?:logged_in_|sec_)?[a-f0-9]{32}$/', $name)) {
+                continue;
+            }
+
+            if (is_scalar($value)) {
+                $allowed[$name] = (string)$value;
+            }
+        }
+
+        return $allowed;
     }
 }

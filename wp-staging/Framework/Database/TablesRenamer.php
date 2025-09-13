@@ -723,7 +723,7 @@ class TablesRenamer
         $currentActivePlugins = maybe_unserialize($currentActivePlugins);
         $currentActivePlugins = array_filter($currentActivePlugins, function ($pluginSlug) {
             return strpos($pluginSlug, self::PLUGIN_BASE_SLUG) === 0;
-        });
+        }, ARRAY_FILTER_USE_KEY); // network active plugins are set in key value pair i.e. ['plugin-slug' => time()], so we need to filter the keys instead
 
         $currentActivePlugins = serialize($currentActivePlugins);
         $this->updateNetworkOptionValue($tmpSiteMetaTable, self::OPTION_ACTIVE_SITEWIDE_PLUGINS, $currentActivePlugins);
@@ -789,6 +789,26 @@ class TablesRenamer
         }
 
         return $this->updateNetworkOptionValue($this->productionTablePrefix . 'sitemeta', self::OPTION_ACTIVE_SITEWIDE_PLUGINS, serialize($activeSitewidePlugins));
+    }
+
+    public function preserveTmpOption(string $optionName): bool
+    {
+        $tmpOptionsTable = $this->tmpPrefix . 'options';
+        if (!$this->tableExists($tmpOptionsTable)) {
+            return false;
+        }
+
+        $optionsTable = $this->productionTablePrefix . 'options';
+        $optionValue  = $this->getOptionValue($optionsTable, $optionName);
+        if (empty($optionValue)) {
+            return false;
+        }
+
+        if ($this->getOptionValue($tmpOptionsTable, $optionName)) {
+            return $this->updateOptionValue($tmpOptionsTable, $optionName, $optionValue);
+        }
+
+        return $this->insertOptionValue($tmpOptionsTable, $optionName, $optionValue);
     }
 
     /**
@@ -920,6 +940,27 @@ class TablesRenamer
         $sql        = "UPDATE {$tableName} SET option_value = '{$optionValue}' WHERE option_name LIKE '{$optionName}'";
 
         return $database->query($sql);
+    }
+
+    /**
+     * @param string $tableName
+     * @param string $optionName
+     * @param string $optionValue
+     * @param bool $isAutoload
+     * @return bool
+     */
+    protected function insertOptionValue(string $tableName, string $optionName, string $optionValue, bool $autoload = false): bool
+    {
+        $database = $this->tableService->getDatabase()->getWpdba()->getClient();
+
+        return $database->query(
+            $database->prepare(
+                "INSERT INTO `{$tableName}` (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+                $optionName,
+                $optionValue,
+                $autoload ? 'yes' : 'no'
+            )
+        );
     }
 
     /**

@@ -24,6 +24,11 @@ use function WPStaging\functions\debug_log;
 class BackgroundProcessingServiceProvider extends FeatureServiceProvider
 {
     /**
+     * @var string
+     */
+    const ACTION_QUEUE_MAINTAIN = 'wpstg_queue_maintain';
+
+    /**
      * {@inheritdoc}
      */
     public static function getFeatureTrigger()
@@ -93,12 +98,12 @@ class BackgroundProcessingServiceProvider extends FeatureServiceProvider
     private function scheduleQueueMaintenance()
     {
         // Once a day fire an action to run the Queue maintenance routines.
-        if (!wp_next_scheduled('wpstg_queue_maintain')) {
-            wp_schedule_event(time(), Cron::DAILY, 'wpstg_queue_maintain');
+        if (!wp_next_scheduled(self::ACTION_QUEUE_MAINTAIN)) {
+            wp_schedule_event(time(), Cron::DAILY, self::ACTION_QUEUE_MAINTAIN);
         }
 
         // When the action fires, run the maintenance routines.
-        add_action('wpstg_queue_maintain', [$this, 'runQueueMaintenance']);
+        add_action(self::ACTION_QUEUE_MAINTAIN, [$this, 'runQueueMaintenance']); // phpcs:ignore WPStaging.Security.FirstArgNotAString
     }
 
     /**
@@ -121,9 +126,9 @@ class BackgroundProcessingServiceProvider extends FeatureServiceProvider
          * Setting up how we make these WordPress actions fire is what we take care of next.
          */
         $wpActions = [
-            QueueProcessor::QUEUE_PROCESS_ACTION,
-            'wp_ajax_nopriv_' . QueueProcessor::QUEUE_PROCESS_ACTION,
-            'wp_ajax_' . QueueProcessor::QUEUE_PROCESS_ACTION,
+            QueueProcessor::ACTION_QUEUE_PROCESS,
+            'wp_ajax_nopriv_' . QueueProcessor::ACTION_QUEUE_PROCESS,
+            'wp_ajax_' . QueueProcessor::ACTION_QUEUE_PROCESS,
         ];
         $queueProcessorProcess = $this->container->callback(QueueProcessor::class, 'process');
 
@@ -139,8 +144,8 @@ class BackgroundProcessingServiceProvider extends FeatureServiceProvider
          * on Cron calls.
          * Once every hour (kinda, it's Cron), fire the `wpstg_queue_process` action.
          */
-        if (!wp_next_scheduled('wpstg_queue_process')) {
-            wp_schedule_event(time(), Cron::HOURLY, QueueProcessor::QUEUE_PROCESS_ACTION);
+        if (!wp_next_scheduled(QueueProcessor::ACTION_QUEUE_PROCESS)) {
+            wp_schedule_event(time(), Cron::HOURLY, QueueProcessor::ACTION_QUEUE_PROCESS);
         }
 
         /*
@@ -166,16 +171,16 @@ class BackgroundProcessingServiceProvider extends FeatureServiceProvider
         // Register the method that will handle the AJAX check.
         $updateOption = $this->container->callback(FeatureDetection::class, 'updateAjaxTestOption');
         // Hook on authenticated AJAX endpoint to handle the check.
-        add_action('wp_ajax_' . FeatureDetection::AJAX_TEST_ACTION, $updateOption); // phpcs:ignore WPStaging.Security.AuthorizationChecked -- Public
-        add_action('wp_ajax_nopriv_' . FeatureDetection::AJAX_TEST_ACTION, $updateOption); // phpcs:ignore WPStaging.Security.AuthorizationChecked -- Public
+        add_action('wp_ajax_' . FeatureDetection::ACTION_AJAX_TEST, $updateOption); // phpcs:ignore WPStaging.Security.AuthorizationChecked -- Public
+        add_action('wp_ajax_nopriv_' . FeatureDetection::ACTION_AJAX_TEST, $updateOption); // phpcs:ignore WPStaging.Security.AuthorizationChecked -- Public
 
         // Once a week re-run the check.
-        if (!wp_next_scheduled('wpstg_q_ajax_support_feature_detection')) {
-            wp_schedule_event(time(), Cron::WEEKLY, 'wpstg_q_ajax_support_feature_detection');
+        if (!wp_next_scheduled(FeatureDetection::ACTION_AJAX_SUPPORT_FEATURE_DETECTION)) {
+            wp_schedule_event(time(), Cron::WEEKLY, FeatureDetection::ACTION_AJAX_SUPPORT_FEATURE_DETECTION);
         }
 
         $runAjaxFeatureTest = $this->container->callback(FeatureDetection::class, 'runAjaxFeatureTest');
-        add_action('wpstg_q_ajax_support_feature_detection', $runAjaxFeatureTest);
+        add_action(FeatureDetection::ACTION_AJAX_SUPPORT_FEATURE_DETECTION, $runAjaxFeatureTest);
 
         // Run the test again if requested by link, e.g. from the notice.
         if (

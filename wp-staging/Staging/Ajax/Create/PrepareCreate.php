@@ -2,23 +2,24 @@
 
 namespace WPStaging\Staging\Ajax\Create;
 
-use RuntimeException;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Facades\Sanitize;
 use WPStaging\Framework\Filesystem\Scanning\ScanConst;
 use WPStaging\Framework\Job\Ajax\PrepareJob;
 use WPStaging\Framework\Job\Exception\ProcessLockedException;
+use WPStaging\Framework\Job\JobTransientCache;
 use WPStaging\Staging\Dto\Job\StagingSiteCreateDataDto;
 use WPStaging\Staging\Dto\StagingSiteDto;
 use WPStaging\Staging\Jobs\StagingSiteCreate;
+use WPStaging\Staging\Service\StagingSetup;
 
 class PrepareCreate extends PrepareJob
 {
     /** @var StagingSiteCreateDataDto */
-    private $jobDataDto;
+    protected $jobDataDto;
 
     /** @var StagingSiteCreate */
-    private $jobCreate;
+    protected $jobCreate;
 
     /**
      * @param array|null $data
@@ -53,16 +54,21 @@ class PrepareCreate extends PrepareJob
     {
         if (empty($data) && array_key_exists('wpstgCreateData', $_POST)) {
             $data = Sanitize::sanitizeArray($_POST['wpstgCreateData'], [
-                'cloneId'           => 'string',
-                'allTablesExcluded' => 'bool',
+                'cloneId'                => 'string',
+                'allTablesExcluded'      => 'bool',
+                'excludeSizeGreaterThan' => 'string',
             ]);
+
             $data['name']                = isset($_POST['wpstgCreateData']['name']) ? Sanitize::sanitizeString($_POST['wpstgCreateData']['name']) : '';
             $data['excludedTables']      = isset($_POST['wpstgCreateData']['excludedTables']) ? $this->parseAndSanitizeTables($_POST['wpstgCreateData']['excludedTables']) : []; // phpcs:ignore
             $data['includedTables']      = isset($_POST['wpstgCreateData']['includedTables']) ? $this->parseAndSanitizeTables($_POST['wpstgCreateData']['includedTables']) : []; // phpcs:ignore
             $data['nonSiteTables']       = isset($_POST['wpstgCreateData']['nonSiteTables']) ? $this->parseAndSanitizeTables($_POST['wpstgCreateData']['nonSiteTables']) : []; // phpcs:ignore
-            $data['excludedDirectories'] = isset($_POST['wpstgCreateData']['excludedDirectories']) ? Sanitize::sanitizeString($_POST['wpstgCreateData']['excludedDirectories']) : [];
-            $data['extraDirectories']    = isset($_POST['wpstgCreateData']['extraDirectories']) ? Sanitize::sanitizeString($_POST['wpstgCreateData']['extraDirectories']) : [];
-            $data['excludeGlobRules']    = isset($_POST['wpstgCreateData']['excludeGlobRules']) ? Sanitize::sanitizeString($_POST['wpstgCreateData']['excludeGlobRules']) : [];
+            $data['excludedDirectories'] = isset($_POST['wpstgCreateData']['excludedDirectories']) ? $this->parseAndSanitizeDirectories($_POST['wpstgCreateData']['excludedDirectories']) : []; // phpcs:ignore
+            $data['extraDirectories']    = isset($_POST['wpstgCreateData']['extraDirectories']) ? $this->parseAndSanitizeDirectories($_POST['wpstgCreateData']['extraDirectories']) : []; // phpcs:ignore
+            // Exclude rules
+            $data['excludeFileRules']      = isset($_POST['wpstgCreateData']['excludeFileRules']) ? $this->parseAndSanitizeDirectories($_POST['wpstgCreateData']['excludeFileRules']) : []; // phpcs:ignore
+            $data['excludeFolderRules']    = isset($_POST['wpstgCreateData']['excludeFolderRules']) ? $this->parseAndSanitizeDirectories($_POST['wpstgCreateData']['excludeFolderRules']) : []; // phpcs:ignore
+            $data['excludeExtensionRules'] = isset($_POST['wpstgCreateData']['excludeExtensionRules']) ? $this->parseAndSanitizeDirectories($_POST['wpstgCreateData']['excludeExtensionRules']) : []; // phpcs:ignore
             $data = array_merge($data, $this->getAdvanceSettings());
         }
 
@@ -71,6 +77,8 @@ class PrepareCreate extends PrepareJob
         } catch (\Exception $e) {
             return new \WP_Error(400, $e->getMessage());
         }
+
+        $this->deleteSseCacheFiles();
 
         return $sanitizedData;
     }
@@ -92,17 +100,7 @@ class PrepareCreate extends PrepareJob
             }
         }
 
-        $defaults = [
-            'cloneId'             => time(),
-            'name'                => '',
-            'allTablesExcluded'   => false,
-            'excludedTables'      => [],
-            'includedTables'      => [],
-            'nonSiteTables'       => [],
-            'excludedDirectories' => [],
-            'extraDirectories'    => [],
-            'excludeGlobRules'    => [],
-        ];
+        $defaults = $this->getDefaults();
 
         $data = wp_parse_args($data, $defaults);
 
@@ -133,17 +131,38 @@ class PrepareCreate extends PrepareJob
         // Extra directories and directories exclusion and rules
         $data['extraDirectories']    = array_map('sanitize_text_field', $data['extraDirectories']);
         $data['excludedDirectories'] = array_map('sanitize_text_field', $data['excludedDirectories']);
-        $data['excludeGlobRules']    = array_map('sanitize_text_field', $data['excludeGlobRules']);
+
+        // Exclude rules
+        $data['excludeSizeGreaterThan'] = sanitize_text_field($data['excludeSizeGreaterThan']);
+        $data['excludeFileRules']       = array_map('sanitize_text_field', $data['excludeFileRules']);
+        $data['excludeFolderRules']     = array_map('sanitize_text_field', $data['excludeFolderRules']);
+        $data['excludeExtensionRules']  = array_map('sanitize_text_field', $data['excludeExtensionRules']);
 
         $data = $this->validateAndSanitizeAdvanceSettingsData($data);
 
         $data['stagingSitePath'] = $this->getDestinationPath($data);
         $data['stagingSiteUrl']  = $this->getDestinationUrl($data);
 
-        // Prepare staging site dto with `unfinished` status
-        $data['stagingSite']     = $this->prepareStagingSiteDto($data);
-
         return $data;
+    }
+
+    protected function getDefaults(): array
+    {
+        return [
+            'cloneId'                => time(),
+            'name'                   => '',
+            'allTablesExcluded'      => false,
+            'excludedTables'         => [],
+            'includedTables'         => [],
+            'nonSiteTables'          => [],
+            'excludedDirectories'    => [],
+            'extraDirectories'       => [],
+            // exclude rules
+            'excludeSizeGreaterThan' => 8,
+            'excludeFileRules'       => [],
+            'excludeFolderRules'     => [],
+            'excludeExtensionRules'  => []
+        ];
     }
 
     protected function getAdvanceSettings(): array
@@ -194,16 +213,20 @@ class PrepareCreate extends PrepareJob
         /** @var StagingSiteCreateDataDto */
         $this->jobDataDto = $services->get(StagingSiteCreateDataDto::class);
         /** @var StagingSiteCreate */
-        $this->jobCreate = $services->get(StagingSiteCreate::class);
+        $this->jobCreate  = $services->get($this->getJobClass());
 
         $this->jobDataDto->hydrate($sanitizedData);
         $this->jobDataDto->setInit(true);
         $this->jobDataDto->setFinished(false);
         $this->jobDataDto->setStartTime(time());
+        $this->jobDataDto->setStagingSiteUploads($this->directory->getRelativeUploadsDirectory());
+        $this->jobDataDto->setJobType(StagingSetup::JOB_NEW_STAGING_SITE);
 
-        $this->setDatabasePrefix();
+        $this->prepareStagingSiteDto();
 
         $this->jobDataDto->setId(substr(md5(mt_rand() . time()), 0, 12));
+
+        $this->jobCreate->getTransientCache()->startJob($this->jobDataDto->getId(), esc_html__('Cloning in Progress', 'wp-staging'), JobTransientCache::JOB_TYPE_STAGING_CREATE, $this->queueId);
 
         $this->jobCreate->setJobDataDto($this->jobDataDto);
 
@@ -218,6 +241,14 @@ class PrepareCreate extends PrepareJob
     public function getJob()
     {
         return $this->jobCreate;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getJobClass(): string
+    {
+        return StagingSiteCreate::class;
     }
 
     /**
@@ -236,16 +267,18 @@ class PrepareCreate extends PrepareJob
         return true;
     }
 
-    protected function setDatabasePrefix()
-    {
-        $this->jobDataDto->setDatabasePrefix($this->findDatabasePrefix());
-    }
-
-    protected function parseAndSanitizeTables(string $tables)
+    protected function parseAndSanitizeTables(string $tables): array
     {
         $tables = $tables === '' ? [] : explode(ScanConst::DIRECTORIES_SEPARATOR, $tables);
 
         return array_map('sanitize_text_field', $tables);
+    }
+
+    protected function parseAndSanitizeDirectories(string $directories): array
+    {
+        $directories = $directories === '' ? [] : explode(ScanConst::DIRECTORIES_SEPARATOR, $directories);
+
+        return array_map('sanitize_text_field', $directories);
     }
 
     protected function findDatabasePrefix()
@@ -318,56 +351,30 @@ class PrepareCreate extends PrepareJob
     {
         $absPath = trailingslashit($this->filesystem->normalizePath($this->directory->getAbsPath()));
 
-        if (empty($data['customPath'])) {
-            return $absPath . $data['name'];
-        }
-
-        $customPath = trailingslashit($this->filesystem->normalizePath($data['customPath']));
-
-        // Throw fatal error
-        if ($customPath === $absPath) {
-            throw new RuntimeException('Error: Target path must be different from the root of the current website.');
-        }
-
-        return $customPath;
+        return $absPath . $data['name'];
     }
 
     protected function getDestinationUrl(array $data): string
     {
-        if (!empty($data['customUrl'])) {
-            return $this->getHostnameWithoutScheme($data['customUrl']);
-        }
-
-        return trailingslashit($this->getHostnameWithoutScheme(home_url())) . $data['name'];
+        return trailingslashit(home_url()) . $data['name'];
     }
 
-    /**
-     * Return Hostname without scheme
-     * @param string $string
-     * @return string
-     */
-    protected function getHostnameWithoutScheme(string $string): string
+    protected function prepareStagingSiteDto()
     {
-        return preg_replace('#^https?://#', '', rtrim($string, '/'));
-    }
+        $this->jobDataDto->setIsExternalDatabase(false);
+        $this->jobDataDto->setDatabasePrefix($this->findDatabasePrefix());
 
-    protected function prepareStagingSiteDto(array $data): StagingSiteDto
-    {
         $stagingSite = new StagingSiteDto();
-        $stagingSite->setCloneId($data['cloneId']);
-        $stagingSite->setCloneName($data['name']);
-        $stagingSite->setPath($data['stagingSitePath']);
-        $stagingSite->setUrl($data['stagingSiteUrl']);
+        $stagingSite->setCloneId($this->jobDataDto->getCloneId());
+        $stagingSite->setCloneName($this->jobDataDto->getName());
+        $stagingSite->setPath($this->jobDataDto->getStagingSitePath());
+        $stagingSite->setUrl($this->jobDataDto->getStagingSiteUrl());
         $stagingSite->setStatus(StagingSiteDto::STATUS_UNFINISHED_BROKEN);
-        $stagingSite->setDatabasePrefix($data['databasePrefix']);
-        if ($data['useCustomDatabase']) {
-            $stagingSite->setDatabaseServer($data['databaseServer']);
-            $stagingSite->setDatabaseDatabase($data['databaseName']);
-            $stagingSite->setDatabaseUser($data['databaseUser']);
-            $stagingSite->setDatabasePassword($data['databasePassword']);
-            $stagingSite->setDatabaseSsl($data['databaseSsl']);
-        }
+        $stagingSite->setPrefix($this->jobDataDto->getDatabasePrefix());
+        $stagingSite->setDatetime(time());
+        $stagingSite->setVersion(WPStaging::getVersion());
+        $stagingSite->setOwnerId(get_current_user_id());
 
-        return $stagingSite;
+        $this->jobDataDto->setStagingSite($stagingSite);
     }
 }

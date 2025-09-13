@@ -24,12 +24,10 @@ use WPStaging\Framework\Language\Language;
 use WPStaging\Framework\NoticeServiceProvider;
 use WPStaging\Framework\Permalinks\PermalinksPurge;
 use WPStaging\Framework\SettingsServiceProvider;
-use WPStaging\Framework\SiteInfo;
 use WPStaging\Staging\FirstRun;
 use WPStaging\Framework\Url;
 use WPStaging\Framework\Utils\Cache\Cache;
 use WPStaging\Frontend\Frontend;
-use WPStaging\Frontend\FrontendServiceProvider;
 use WPStaging\Pro\ProServiceProvider;
 use WPStaging\Staging\StagingServiceProvider;
 
@@ -44,6 +42,9 @@ final class WPStaging
      * @var string
      */
     const HOOK_BOOTSTRAP_SERVICES = 'wpstg.bootstrap.services';
+
+    /** @var string */
+    const ACTION_PUSHING_COMPLETE = 'wpstg_pushing_complete';
 
     /**
      * Singleton instance
@@ -102,6 +103,7 @@ final class WPStaging
             throw new RuntimeException('Basic and Pro Providers both not found! At least one of them should be present.');
         }
 
+        $this->registerInitHook();
         $this->setupDebugLog();
 
         $this->container->register(CoreServiceProvider::class);
@@ -140,8 +142,6 @@ final class WPStaging
         // Internal Use Only: Register Basic or Pro specific services.
         Hooks::callInternalHook(self::HOOK_BOOTSTRAP_SERVICES);
 
-        $this->container->register(FrontendServiceProvider::class);
-
         $this->handleCacheIssues();
         $this->preventDirectoryListing();
     }
@@ -149,6 +149,108 @@ final class WPStaging
     public function registerErrorHandler()
     {
         $this->errorHandler->registerShutdownHandler();
+    }
+
+    /**
+     * @return void
+     */
+    public function registerInitHook()
+    {
+        /**
+         * This hook is used to delete old SSE files
+         * This will run on all requests, to keep memory usage low, we don't use/load our whole plugin for this.
+         * So not use any of our classes, const to avoid loading the whole plugin.
+         */
+        add_action('init', function () {
+            // Run this only after 24 hours passed
+            $run = get_transient('wpstg.run_daily');
+            if ($run) {
+                return;
+            }
+
+            set_transient('wpstg.run_daily', true, 24 * HOUR_IN_SECONDS);
+
+            $maxAge = HOUR_IN_SECONDS; // Lets delete files older than 1 hour
+            $now    = time();
+
+            // Lets delete sse files older than 1 hour
+            $this->cleanupDirectory(WP_CONTENT_DIR . '/wp-staging/sse', $maxAge, $now, $scanChildren = false);
+
+            // Lets also delete validation files older than 1 hour
+            $this->cleanupDirectory(WP_CONTENT_DIR . '/wp-staging/tmp/restore/validate', $maxAge, $now);
+        }, 1);
+    }
+
+    /**
+     * Recursively clean up a directory by deleting files older than a specified age and removing empty folders.
+     *
+     * This method scans the specified directory and optionally its subdirectories to delete files that exceed
+     * the maximum age. Empty directories are also removed after their contents are processed.
+     *
+     * @param string $directory The directory to clean up. Must be a valid directory path.
+     * @param int $maxAge Maximum age in seconds for files to keep. Files older than this will be deleted.
+     * @param int $now Current timestamp, used to calculate the age of files.
+     * @param bool $scanChildren If true, the method will recursively scan and clean subdirectories. If false,
+     *                           only the specified directory will be processed, and subdirectories will be ignored.
+     *                           Note: If subdirectories are ignored, they will not be deleted even if empty.
+     *
+     * @return void
+     *
+     * @throws RuntimeException If the directory cannot be read or accessed.
+     *
+     * Example usage:
+     * $this->cleanupDirectory('/path/to/directory', 3600, time(), true);
+     * - Deletes files older than 1 hour (3600 seconds) in the specified directory and its subdirectories.
+     * - Removes empty subdirectories after processing.
+     */
+    private function cleanupDirectory(string $directory, int $maxAge, int $now, bool $scanChildren = true)
+    {
+        if (!is_dir($directory)) {
+            return;
+        }
+
+        $items    = scandir($directory);
+        $hasFiles = false;
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $itemPath = trailingslashit($directory) . $item;
+
+            if (is_file($itemPath)) {
+                $hasFiles = true;
+                $fileAge  = $now - filemtime($itemPath);
+                if ($fileAge >= $maxAge) {
+                    @unlink($itemPath);
+                }
+            } elseif (is_dir($itemPath) && $scanChildren) {
+                // Recursively clean up subdirectories
+                $this->cleanupDirectory($itemPath, $maxAge, $now);
+
+                // Check if the subdirectory is now empty after cleanup
+                $subItems    = scandir($itemPath);
+                $subHasFiles = false;
+                foreach ($subItems as $subItem) {
+                    if ($subItem !== '.' && $subItem !== '..') {
+                        $subHasFiles = true;
+                        break;
+                    }
+                }
+
+                // If subdirectory is empty, delete it
+                if (!$subHasFiles) {
+                    @rmdir($itemPath);
+                } else {
+                    $hasFiles = true; // Parent directory has files
+                }
+            }
+        }
+
+        // If current directory is empty and we are not scanning children directories
+        if (!$hasFiles && $scanChildren) {
+            @rmdir($directory);
+        }
     }
 
     protected function setupDebugLog()
@@ -316,9 +418,9 @@ final class WPStaging
         }
 
         if (class_exists('\WPStaging\Pro\Frontend\Frontend')) {
-            new \WPStaging\Pro\Frontend\Frontend();
+            $this->container->get(\WPStaging\Pro\Frontend\Frontend::class);
         } else {
-            new Frontend();
+            $this->container->get(Frontend::class);
         }
     }
 
@@ -502,7 +604,7 @@ final class WPStaging
     private function handleCacheIssues()
     {
         $permalinksPurge = new PermalinksPurge();
-        add_action('wpstg_pushing_complete', [$permalinksPurge, 'executeAfterPushing']);
+        add_action(self::ACTION_PUSHING_COMPLETE, [$permalinksPurge, 'executeAfterPushing']); // phpcs:ignore WPStaging.Security.FirstArgNotAString
         add_action('wp_loaded', [$permalinksPurge, 'purgePermalinks'], $permalinksPurge::PLUGINS_LOADED_PRIORITY);
     }
 

@@ -21,7 +21,7 @@ class JobTransientCache
      * can get the latest status of the job.
      * @var int
      */
-    const JOB_TRANSIENT_EXPIRY_ON_COMPLETE = 15; // 15 seconds
+    const JOB_TRANSIENT_EXPIRY_ON_COMPLETE = 15;
 
     /**
      * This is the transient key that will be used to store the current job data.
@@ -67,17 +67,43 @@ class JobTransientCache
     /**
      * @var string
      */
-    const JOB_TYPE_STAGING = 'Staging';
+    const JOB_TYPE_PLUGINS_UPDATER = 'Plugins_Updater';
+
+    /**
+     * @var string
+     */
+    const JOB_TYPE_STAGING_CREATE = 'Staging_Create';
 
     /**
      * @var string
      */
     const JOB_TYPE_STAGING_DELETE = 'Staging_Delete';
 
+    /**
+     * @var string
+     */
+    const JOB_TYPE_PULL_PREPARE = 'Pull_Prepare';
+
+    /**
+     * @var string
+     */
+    const JOB_TYPE_PULL_RESTORE = 'Pull_Restore';
+
+    /**
+     * @var string
+     */
+    const JOB_TYPE_REMOTE_UPLOAD = 'Remote_Upload';
+
+    /**
+     * @var string[]
+     */
     const CANCELABLE_JOBS = [
         self::JOB_TYPE_BACKUP,
         self::JOB_TYPE_RESTORE,
-        self::JOB_TYPE_STAGING,
+        self::JOB_TYPE_PULL_PREPARE,
+        self::JOB_TYPE_PULL_RESTORE,
+        self::JOB_TYPE_STAGING_CREATE,
+        self::JOB_TYPE_REMOTE_UPLOAD,
     ];
 
     /**
@@ -96,9 +122,22 @@ class JobTransientCache
             'status'  => self::STATUS_RUNNING,
             'start'   => time(),
             'queueId' => $queueId,
+            'message' => ''
         ];
 
         delete_transient(self::TRANSIENT_CURRENT_JOB);
+        set_transient(self::TRANSIENT_CURRENT_JOB, $jobData, self::JOB_TRANSIENT_EXPIRY);
+    }
+
+    /**
+     * @param string $title
+     * @return void
+     */
+    public function updateTitle(string $title)
+    {
+        $jobData = $this->getJob();
+        $jobData['title'] = $title;
+
         set_transient(self::TRANSIENT_CURRENT_JOB, $jobData, self::JOB_TRANSIENT_EXPIRY);
     }
 
@@ -121,9 +160,9 @@ class JobTransientCache
     /**
      * @return void
      */
-    public function failJob()
+    public function failJob(string $title = '', string $message = '')
     {
-        $this->stopJob(self::STATUS_FAILED);
+        $this->stopJob(self::STATUS_FAILED, $title, $message);
     }
 
     /**
@@ -159,12 +198,22 @@ class JobTransientCache
         return $jobData['status'];
     }
 
-    private function stopJob(string $status, string $title = '')
+    /**
+     * @param string $status
+     * @param string $title
+     * @param string $message
+     * @return void
+     */
+    private function stopJob(string $status, string $title = '', string $message = '')
     {
         $jobData = $this->getJob();
         $jobData['status'] = $status;
         if (!empty($title)) {
             $jobData['title'] = $title;
+        }
+
+        if (!empty($message)) {
+            $jobData['message'] = $message;
         }
 
         // This will make sure to update the expiry as well if the status was already the same!

@@ -18,7 +18,7 @@ use WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\BCMath;
  *
  * @author  Jim Wigginton <terrafrost@php.net>
  */
-abstract class Base extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\BCMath
+abstract class Base extends BCMath
 {
     /**
      * Cache constants
@@ -50,7 +50,7 @@ abstract class Base extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines
      * @param string $class
      * @return BCMath
      */
-    protected static function powModHelper(\WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\BCMath $x, \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\BCMath $e, \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines\BCMath $n, $class)
+    protected static function powModHelper(BCMath $x, BCMath $e, BCMath $n, $class)
     {
         if (empty($e->value)) {
             $temp = new $class();
@@ -84,7 +84,7 @@ abstract class Base extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines
      */
     protected static function multiplyReduce($x, $y, $n, $class)
     {
-        return static::reduce(\bcmul($x, $y), $n);
+        return static::reduce(\bcmul($x, $y, 0), $n);
     }
     /**
      * Modular square
@@ -97,6 +97,6 @@ abstract class Base extends \WPStaging\Vendor\phpseclib3\Math\BigInteger\Engines
      */
     protected static function squareReduce($x, $n, $class)
     {
-        return static::reduce(\bcmul($x, $x), $n);
+        return static::reduce(\bcmul($x, $x, 0), $n);
     }
 }

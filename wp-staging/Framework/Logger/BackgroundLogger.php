@@ -3,6 +3,7 @@
 namespace WPStaging\Framework\Logger;
 
 use WP_REST_Request;
+use WPStaging\Core\Utils\Logger;
 use WPStaging\Framework\Job\JobTransientCache;
 use WPStaging\Framework\Rest\Rest;
 
@@ -128,8 +129,23 @@ class BackgroundLogger
             $events = $this->sseEventCache->getEvents($offset);
 
             foreach ($events as $event) {
-                if ($event['type'] === 'task') {
+                if ($event['type'] === SseEventCache::EVENT_TYPE_TASK) {
                     $this->pushTaskProgress($jobId, $event['data']);
+                    continue;
+                }
+
+                if ($event['type'] === SseEventCache::EVENT_TYPE_COMPLETE) {
+                    $this->output($jobId, $event['data']['status'], json_encode($event['data']['data']));
+                    continue;
+                }
+
+                if ($event['type'] === SseEventCache::EVENT_TYPE_MEMORY_EXHAUST) {
+                    $this->output($jobId, SseEventCache::EVENT_TYPE_MEMORY_EXHAUST, json_encode($event['data']));
+                    $this->output($jobId, '', json_encode([
+                        'type'    => Logger::TYPE_ERROR,
+                        'date'    => $event['data']['time'],
+                        'message' => "Memory exceed allowed size! Allowed memory: {$event['data']['allowedMemoryLimit']} bytes. Exceeded memory: {$event['data']['exhaustedMemorySize']} bytes",
+                    ]));
                     continue;
                 }
 
@@ -178,8 +194,8 @@ class BackgroundLogger
         $data = [];
 
         if ($status === JobTransientCache::STATUS_CANCELLED) {
-            $this->output($jobData['jobId'], 'task', json_encode([
-                'percentage' => 80,
+            $this->output($jobData['jobId'], SseEventCache::EVENT_TYPE_TASK, json_encode([
+                'percentage' => 60, // We don't show logs for cancelling jobs, this is just a placeholder
                 'title'      => esc_html__('Processing...', 'wp-staging'),
             ]));
             $data['title'] = $jobData['title'];
@@ -202,7 +218,7 @@ class BackgroundLogger
         $this->lastPercentage = $taskData['percentage'];
         $this->lastTaskTitle  = $taskData['title'];
 
-        $this->output($jobId, 'task', json_encode($taskData));
+        $this->output($jobId, SseEventCache::EVENT_TYPE_TASK, json_encode($taskData));
     }
 
     /**

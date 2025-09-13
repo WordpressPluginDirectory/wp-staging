@@ -10,24 +10,24 @@ use RuntimeException;
 use WPStaging\Backup\BackupFileIndex;
 use WPStaging\Backup\BackupHeader;
 use WPStaging\Backup\Dto\Job\JobBackupDataDto;
-use WPStaging\Framework\Job\Dto\JobDataDto;
 use WPStaging\Backup\Dto\Service\ArchiverDto;
 use WPStaging\Backup\Entity\BackupMetadata;
 use WPStaging\Backup\Exceptions\BackupSkipItemException;
-use WPStaging\Framework\Job\Exception\DiskNotWritableException;
-use WPStaging\Framework\Job\Exception\NotFinishedException;
 use WPStaging\Backup\FileHeader;
 use WPStaging\Core\WPStaging;
 use WPStaging\Framework\Adapter\Directory;
 use WPStaging\Framework\Adapter\PhpAdapter;
 use WPStaging\Framework\Facades\Hooks;
 use WPStaging\Framework\Filesystem\Filesystem;
-use WPStaging\Framework\Filesystem\PathIdentifier;
-use WPStaging\Framework\Utils\Cache\BufferedCache;
-use WPStaging\Framework\Traits\EndOfLinePlaceholderTrait;
-use WPStaging\Vendor\lucatume\DI52\NotFoundException;
 use WPStaging\Framework\Filesystem\PartIdentifier;
+use WPStaging\Framework\Filesystem\PathIdentifier;
+use WPStaging\Framework\Job\Dto\JobDataDto;
+use WPStaging\Framework\Job\Exception\DiskNotWritableException;
+use WPStaging\Framework\Job\Exception\NotFinishedException;
 use WPStaging\Framework\Job\Exception\ThresholdException;
+use WPStaging\Framework\Traits\EndOfLinePlaceholderTrait;
+use WPStaging\Framework\Utils\Cache\BufferedCache;
+use WPStaging\Vendor\lucatume\DI52\NotFoundException;
 
 use function WPStaging\functions\debug_log;
 
@@ -269,6 +269,9 @@ class Archiver
         if (!$this->isBackupFormatV1() && !$this->archiverDto->isFileHeaderWritten()) {
             $fileHeaderSizeInBytes = $this->writeFileHeader($fullFilePath, $indexPath);
             $this->archiverDto->setFileHeaderSizeInBytes($fileHeaderSizeInBytes);
+        } elseif (!$this->isBackupFormatV1()) {
+            $identifiablePath = $this->pathIdentifier->transformPathToIdentifiable($this->filesystem->maybeNormalizePath($indexPath));
+            $this->fileHeader->readFile($fullFilePath, $identifiablePath);
         }
 
         $writtenBytesBefore = $this->archiverDto->getWrittenBytesTotal();
@@ -285,6 +288,11 @@ class Archiver
 
         $newBytesWritten                 = $writtenBytesTotal + $fileHeaderSizeInBytes - $writtenBytesBefore;
         $writtenBytesIncludingFileHeader = $writtenBytesTotal + $this->archiverDto->getFileHeaderSizeInBytes();
+
+        if (!$this->isBackupFormatV1() && empty($this->fileHeader->getFilePath())) {
+            $identifiablePath = $this->pathIdentifier->transformPathToIdentifiable($this->filesystem->maybeNormalizePath($indexPath));
+            $this->fileHeader->readFile($fullFilePath, $identifiablePath);
+        }
 
         $retries = 0;
 
@@ -593,6 +601,39 @@ class Archiver
         $jobDataDto->resetNumberOfRetries();
     }
 
+    protected function addNewFileHeaderToIndex(int $writtenBytes, int $startOffset): int
+    {
+        if ($this->isIndexPositionCreated()) {
+            return 0;
+        }
+
+        $this->fileHeader->setStartOffset($startOffset);
+        return $this->tempBackupIndex->append($this->fileHeader->getIndexHeader());
+    }
+
+    /**
+     * @param resource $resource
+     * @param string $filePath
+     *
+     * @return int Bytes written
+     * @throws DiskNotWritableException
+     * @throws RuntimeException
+     * @throws ThresholdException
+     */
+    protected function appendToArchiveFile($resource, string $filePath): int
+    {
+        try {
+            return $this->tempBackup->appendFile(
+                $resource,
+                $this->archiverDto->getWrittenBytesTotal()
+            );
+        } catch (DiskNotWritableException $e) {
+            debug_log('Failed to write to file: ' . $filePath);
+            // Re-throw for readability
+            throw $e;
+        }
+    }
+
     /**
      * @throws RuntimeException
      *
@@ -635,14 +676,9 @@ class Archiver
         $start = max($this->archivedFileSize - $writtenBytesTotal, 0);
 
         $identifiablePath = $this->pathIdentifier->transformPathToIdentifiable($this->archiverDto->getIndexPath());
-        // New Backup format
-        if ($this->isIndexPositionCreated() && !$this->isBackupFormatV1()) {
-            $this->addIndexPartSize($identifiablePath, $newBytesAdded);
-            return $newBytesAdded;
-        }
 
         // Old backup format
-        if ($this->isIndexPositionCreated()) {
+        if ($this->isBackupFormatV1() && $this->isIndexPositionCreated()) {
             return $this->updateIndexInformationForAlreadyAddedIndex($writtenBytesTotal);
         }
 
@@ -650,9 +686,14 @@ class Archiver
             $identifiablePath = $this->pathIdentifier->transformPathToIdentifiable($this->archiverDto->getIndexPath());
             $backupFileIndex  = $this->backupFileIndex->createIndex($identifiablePath, $start, $writtenBytesTotal, false);
             $bytesWritten     = $this->tempBackupIndex->append($backupFileIndex->getIndex());
-        } else {
-            $this->fileHeader->setStartOffset($start);
-            $bytesWritten = $this->tempBackupIndex->append($this->fileHeader->getIndexHeader());
+        }
+
+        if (!$this->isBackupFormatV1()) {
+            $bytesWritten = $this->addNewFileHeaderToIndex($newBytesAdded, $start);
+            if ($this->isIndexPositionCreated()) {
+                $this->addIndexPartSize($identifiablePath, $newBytesAdded);
+                return $newBytesAdded;
+            }
         }
 
         $this->archiverDto->setIndexPositionCreated(true);
@@ -681,29 +722,6 @@ class Archiver
     }
 
     /**
-     * @param resource $resource
-     * @param string $filePath
-     *
-     * @return int Bytes written
-     * @throws DiskNotWritableException
-     * @throws RuntimeException
-     * @throws ThresholdException
-     */
-    private function appendToArchiveFile($resource, string $filePath): int
-    {
-        try {
-            return $this->tempBackup->appendFile(
-                $resource,
-                $this->archiverDto->getWrittenBytesTotal()
-            );
-        } catch (DiskNotWritableException $e) {
-            debug_log('Failed to write to file: ' . $filePath);
-            // Re-throw for readability
-            throw $e;
-        }
-    }
-
-    /**
      * @param string $identifiablePath
      * @param int    $newBytesWritten
      *
@@ -719,7 +737,7 @@ class Archiver
         /** @var JobBackupDataDto $jobDataDto */
         $jobDataDto = $this->jobDataDto;
 
-        $collectPartsize = $jobDataDto->getCategorySizes();
+        $collectPartSize = $jobDataDto->getCategorySizes();
 
         $partName = '';
         switch ($identifiablePath) {
@@ -728,11 +746,11 @@ class Archiver
 
                 if ($this->pathIdentifier->hasDropinsFile($identifiablePath)) {
                     $dropinsPartName = PartIdentifier::DROPIN_PART_SIZE_IDENTIFIER;
-                    if (!isset($collectPartsize[$dropinsPartName])) {
-                        $collectPartsize[$dropinsPartName] = 0;
+                    if (!isset($collectPartSize[$dropinsPartName])) {
+                        $collectPartSize[$dropinsPartName] = 0;
                     }
 
-                    $collectPartsize[$dropinsPartName] += $newBytesWritten;
+                    $collectPartSize[$dropinsPartName] += $newBytesWritten;
                 }
 
                 break;
@@ -765,12 +783,12 @@ class Archiver
         }
 
         // If identifier not in array yet
-        if (!isset($collectPartsize[$partName])) {
-            $collectPartsize[$partName] = 0;
+        if (!isset($collectPartSize[$partName])) {
+            $collectPartSize[$partName] = 0;
         }
 
-        $collectPartsize[$partName] += $newBytesWritten;
-        $jobDataDto->setCategorySizes($collectPartsize);
+        $collectPartSize[$partName] += $newBytesWritten;
+        $jobDataDto->setCategorySizes($collectPartSize);
     }
 
     /**

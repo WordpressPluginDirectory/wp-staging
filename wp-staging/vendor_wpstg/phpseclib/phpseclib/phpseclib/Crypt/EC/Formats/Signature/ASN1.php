@@ -36,22 +36,22 @@ abstract class ASN1
         if (!\is_string($sig)) {
             return \false;
         }
-        $decoded = \WPStaging\Vendor\phpseclib3\File\ASN1::decodeBER($sig);
+        $decoded = Encoder::decodeBER($sig);
         if (empty($decoded)) {
             return \false;
         }
-        $components = \WPStaging\Vendor\phpseclib3\File\ASN1::asn1map($decoded[0], \WPStaging\Vendor\phpseclib3\File\ASN1\Maps\EcdsaSigValue::MAP);
+        $components = Encoder::asn1map($decoded[0], EcdsaSigValue::MAP);
         return $components;
     }
     /**
      * Returns a signature in the appropriate format
      *
-     * @param \phpseclib3\Math\BigInteger $r
-     * @param \phpseclib3\Math\BigInteger $s
+     * @param BigInteger $r
+     * @param BigInteger $s
      * @return string
      */
-    public static function save(\WPStaging\Vendor\phpseclib3\Math\BigInteger $r, \WPStaging\Vendor\phpseclib3\Math\BigInteger $s)
+    public static function save(BigInteger $r, BigInteger $s)
     {
-        return \WPStaging\Vendor\phpseclib3\File\ASN1::encodeDER(\compact('r', 's'), \WPStaging\Vendor\phpseclib3\File\ASN1\Maps\EcdsaSigValue::MAP);
+        return Encoder::encodeDER(\compact('r', 's'), EcdsaSigValue::MAP);
     }
 }

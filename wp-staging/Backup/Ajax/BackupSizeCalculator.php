@@ -94,8 +94,9 @@ class BackupSizeCalculator extends AbstractFilesystemScanner
          * Allow user to exclude certain file extensions from being backup.
          */
         $this->ignoreFileExtensions = (array)apply_filters('wpstg.export.files.ignore.file_extension', [
-            'log',
             'wpstg', // WP STAGING backup files
+            'gz',
+            'tmp',
         ]);
 
         /**

@@ -69,7 +69,10 @@ class PrepareBackup extends PrepareJob
         try {
             $this->processLock->checkProcessLocked();
         } catch (ProcessLockedException $e) {
-            wp_send_json_error($e->getMessage(), $e->getCode());
+            wp_send_json_error([
+                'message' => $e->getMessage(),
+                'title'   => esc_html__('Backup in Progress', 'wp-staging'),
+            ], $e->getCode());
         }
 
         $response = $this->prepare($data);
@@ -120,6 +123,10 @@ class PrepareBackup extends PrepareJob
             $sanitizedData = $this->setupInitialData($data);
         } catch (\Exception $e) {
             return new \WP_Error(400, $e->getMessage());
+        }
+
+        if (!$this->jobDataDto->getIsSyncRequest()) {
+            $this->deleteSseCacheFiles();
         }
 
         return $sanitizedData;

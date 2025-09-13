@@ -38,7 +38,7 @@ namespace WPStaging\Vendor\phpseclib3\Crypt;
  *
  * @author  Jim Wigginton <terrafrost@php.net>
  */
-class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
+class TripleDES extends DES
 {
     /**
      * Encrypt / decrypt using inner chaining
@@ -62,15 +62,15 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
     /**
      * The mcrypt specific name of the cipher
      *
-     * @see \phpseclib3\Crypt\DES::cipher_name_mcrypt
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::cipher_name_mcrypt
+     * @see DES::cipher_name_mcrypt
+     * @see Common\SymmetricKey::cipher_name_mcrypt
      * @var string
      */
     protected $cipher_name_mcrypt = 'tripledes';
     /**
      * Optimizing value while CFB-encrypting
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::cfb_init_len
+     * @see Common\SymmetricKey::cfb_init_len
      * @var int
      */
     protected $cfb_init_len = 750;
@@ -78,7 +78,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      * max possible size of $key
      *
      * @see self::setKey()
-     * @see \phpseclib3\Crypt\DES::setKey()
+     * @see DES::setKey()
      * @var string
      */
     protected $key_length_max = 24;
@@ -117,8 +117,8 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * - cbc3 (same as cbc)
      *
-     * @see \phpseclib3\Crypt\DES::__construct()
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::__construct()
+     * @see Crypt\DES::__construct()
+     * @see Common\SymmetricKey::__construct()
      * @param string $mode
      */
     public function __construct($mode)
@@ -130,7 +130,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
                 parent::__construct('cbc');
                 $this->mode_3cbc = \true;
                 // This three $des'es will do the 3CBC work (if $key > 64bits)
-                $this->des = [new \WPStaging\Vendor\phpseclib3\Crypt\DES('cbc'), new \WPStaging\Vendor\phpseclib3\Crypt\DES('cbc'), new \WPStaging\Vendor\phpseclib3\Crypt\DES('cbc')];
+                $this->des = [new DES('cbc'), new DES('cbc'), new DES('cbc')];
                 // we're going to be doing the padding, ourselves, so disable it in the \phpseclib3\Crypt\DES objects
                 $this->des[0]->disablePadding();
                 $this->des[1]->disablePadding();
@@ -143,7 +143,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
             default:
                 parent::__construct($mode);
                 if ($this->mode == self::MODE_STREAM) {
-                    throw new \WPStaging\Vendor\phpseclib3\Crypt\BadModeException('Block ciphers cannot be ran in stream mode');
+                    throw new BadModeException('Block ciphers cannot be ran in stream mode');
                 }
         }
     }
@@ -152,7 +152,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * This is mainly just a wrapper to set things up for \phpseclib3\Crypt\Common\SymmetricKey::isValidEngine()
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::__construct()
+     * @see Common\SymmetricKey::__construct()
      * @param int $engine
      * @return bool
      */
@@ -170,7 +170,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * SetIV is not required when \phpseclib3\Crypt\Common\SymmetricKey::MODE_ECB is being used.
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::setIV()
+     * @see Common\SymmetricKey::setIV()
      * @param string $iv
      */
     public function setIV($iv)
@@ -189,7 +189,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * If you want to use a 64-bit key use DES.php
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey:setKeyLength()
+     * @see Common\SymmetricKey:setKeyLength()
      * @throws \LengthException if the key length is invalid
      * @param int $length
      */
@@ -211,8 +211,8 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * DES also requires that every eighth bit be a parity bit, however, we'll ignore that.
      *
-     * @see \phpseclib3\Crypt\DES::setKey()
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::setKey()
+     * @see DES::setKey()
+     * @see Common\SymmetricKey::setKey()
      * @throws \LengthException if the key length is invalid
      * @param string $key
      */
@@ -244,7 +244,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
     /**
      * Encrypts a message.
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::encrypt()
+     * @see Common\SymmetricKey::encrypt()
      * @param string $plaintext
      * @return string $cipertext
      */
@@ -261,14 +261,14 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
     /**
      * Decrypts a message.
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::decrypt()
+     * @see Common\SymmetricKey::decrypt()
      * @param string $ciphertext
      * @return string $plaintext
      */
     public function decrypt($ciphertext)
     {
         if ($this->mode_3cbc && \strlen($this->key) > 8) {
-            return $this->unpad($this->des[0]->decrypt($this->des[1]->encrypt($this->des[2]->decrypt(\str_pad($ciphertext, \strlen($ciphertext) + 7 & 0xfffffff8, "\0")))));
+            return $this->unpad($this->des[0]->decrypt($this->des[1]->encrypt($this->des[2]->decrypt(\str_pad($ciphertext, \strlen($ciphertext) + 7 & 0xfffffff8, "\x00")))));
         }
         return parent::decrypt($ciphertext);
     }
@@ -306,7 +306,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      * continuous buffers not be used.  They do offer better security and are, in fact, sometimes required (SSH uses them),
      * however, they are also less intuitive and more likely to cause you problems.
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::enableContinuousBuffer()
+     * @see Common\SymmetricKey::enableContinuousBuffer()
      * @see self::disableContinuousBuffer()
      */
     public function enableContinuousBuffer()
@@ -323,7 +323,7 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
      *
      * The default behavior.
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::disableContinuousBuffer()
+     * @see Common\SymmetricKey::disableContinuousBuffer()
      * @see self::enableContinuousBuffer()
      */
     public function disableContinuousBuffer()
@@ -338,8 +338,8 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
     /**
      * Creates the key schedule
      *
-     * @see \phpseclib3\Crypt\DES::setupKey()
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::setupKey()
+     * @see DES::setupKey()
+     * @see Common\SymmetricKey::setupKey()
      */
     protected function setupKey()
     {
@@ -368,8 +368,8 @@ class TripleDES extends \WPStaging\Vendor\phpseclib3\Crypt\DES
     /**
      * Sets the internal crypt engine
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::__construct()
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::setPreferredEngine()
+     * @see Common\SymmetricKey::__construct()
+     * @see Common\SymmetricKey::setPreferredEngine()
      * @param int $engine
      */
     public function setPreferredEngine($engine)

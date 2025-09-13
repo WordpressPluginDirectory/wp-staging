@@ -42,19 +42,19 @@ use WPStaging\Vendor\phpseclib3\Exception\BadModeException;
  * @author  Jim Wigginton <terrafrost@php.net>
  * @author  Hans-Juergen Petrich <petrich@tronic-media.com>
  */
-class Twofish extends \WPStaging\Vendor\phpseclib3\Crypt\Common\BlockCipher
+class Twofish extends BlockCipher
 {
     /**
      * The mcrypt specific name of the cipher
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::cipher_name_mcrypt
+     * @see Common\SymmetricKey::cipher_name_mcrypt
      * @var string
      */
     protected $cipher_name_mcrypt = 'twofish';
     /**
      * Optimizing value while CFB-encrypting
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::cfb_init_len
+     * @see Common\SymmetricKey::cfb_init_len
      * @var int
      */
     protected $cfb_init_len = 800;
@@ -147,7 +147,7 @@ class Twofish extends \WPStaging\Vendor\phpseclib3\Crypt\Common\BlockCipher
     {
         parent::__construct($mode);
         if ($this->mode == self::MODE_STREAM) {
-            throw new \WPStaging\Vendor\phpseclib3\Exception\BadModeException('Block ciphers cannot be ran in stream mode');
+            throw new BadModeException('Block ciphers cannot be ran in stream mode');
         }
     }
     /**
@@ -208,7 +208,7 @@ class Twofish extends \WPStaging\Vendor\phpseclib3\Crypt\Common\BlockCipher
     /**
      * Setup the key (expansion)
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::_setupKey()
+     * @see Common\SymmetricKey::_setupKey()
      */
     protected function setupKey()
     {
@@ -402,7 +402,7 @@ class Twofish extends \WPStaging\Vendor\phpseclib3\Crypt\Common\BlockCipher
     /**
      * Setup the performance-optimized function for de/encrypt()
      *
-     * @see \phpseclib3\Crypt\Common\SymmetricKey::_setupInlineCrypt()
+     * @see Common\SymmetricKey::_setupInlineCrypt()
      */
     protected function setupInlineCrypt()
     {
